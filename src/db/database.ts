@@ -1,11 +1,15 @@
 import { createRxDatabase, addRxPlugin, type RxStorage } from 'rxdb'
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie'
+import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema'
 import {
   exerciseSchema,
   sessionSchema,
   setLogSchema,
+  planSchema,
   type WorkoutDatabase,
 } from './schema'
+
+addRxPlugin(RxDBMigrationSchemaPlugin)
 
 async function makeStorage(): Promise<RxStorage<unknown, unknown>> {
   const storage = getRxStorageDexie()
@@ -35,8 +39,13 @@ async function create(): Promise<WorkoutDatabase> {
   })
   await db.addCollections({
     exercises: { schema: exerciseSchema },
-    sessions: { schema: sessionSchema },
+    sessions: {
+      schema: sessionSchema,
+      // v0→v1 added the nullable plannedDay; existing sessions default to null.
+      migrationStrategies: { 1: (doc) => ({ ...doc, plannedDay: null }) },
+    },
     setlogs: { schema: setLogSchema },
+    plans: { schema: planSchema },
   })
   return db
 }

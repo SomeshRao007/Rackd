@@ -7,8 +7,9 @@ type Row = Record<string, unknown>
 // Synced collections and their columns (id first). userId is forced from the JWT,
 // never trusted from the client body — this is the per-user isolation boundary.
 const TABLES: Record<string, string[]> = {
-  sessions: ['id', 'userId', 'date', 'title', 'createdAt', 'updatedAt', 'deletedAt'],
+  sessions: ['id', 'userId', 'date', 'title', 'plannedDay', 'createdAt', 'updatedAt', 'deletedAt'],
   setlogs: ['id', 'userId', 'sessionId', 'exerciseId', 'exerciseName', 'weightKg', 'reps', 'order', 'createdAt', 'updatedAt', 'deletedAt'],
+  plans: ['id', 'userId', 'name', 'days', 'sourceShareCode', 'createdAt', 'updatedAt', 'deletedAt'],
 }
 
 // `order` is a SQL keyword — quote it.

@@ -5,12 +5,15 @@
  * Run with wrangler up:  npx tsx scripts/m2-replication-test.ts
  */
 import assert from 'node:assert/strict'
-import { createRxDatabase } from 'rxdb'
+import { createRxDatabase, addRxPlugin } from 'rxdb'
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory'
+import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema'
 import { replicateCollection } from '../src/db/sync.ts'
 import { setLogSchema, sessionSchema } from '../src/db/schema.ts'
 
-const BASE = 'http://localhost:8788'
+addRxPlugin(RxDBMigrationSchemaPlugin)
+
+const BASE = process.env.SYNC_BASE ?? 'http://localhost:8788'
 // Shipping sync.ts uses relative URLs (correct in a browser). Node's fetch rejects them,
 // so resolve relative paths against BASE here — mirrors how the browser resolves them.
 const realFetch = globalThis.fetch
@@ -50,7 +53,10 @@ async function devToken(): Promise<string> {
 async function makeDb(name: string) {
   const db = await createRxDatabase({ name, storage: getRxStorageMemory() })
   await db.addCollections({
-    sessions: { schema: sessionSchema },
+    sessions: {
+      schema: sessionSchema,
+      migrationStrategies: { 1: (doc) => ({ ...doc, plannedDay: null }) },
+    },
     setlogs: { schema: setLogSchema },
   })
   return db

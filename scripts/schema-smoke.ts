@@ -7,15 +7,18 @@ import assert from 'node:assert'
 import { createRxDatabase, addRxPlugin } from 'rxdb'
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory'
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode'
+import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema'
 import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv'
 import {
   exerciseSchema,
   sessionSchema,
   setLogSchema,
+  planSchema,
   type WorkoutDatabase,
 } from '../src/db/schema'
 
 addRxPlugin(RxDBDevModePlugin)
+addRxPlugin(RxDBMigrationSchemaPlugin)
 
 const db = await createRxDatabase<WorkoutDatabase>({
   name: 'smoke',
@@ -23,8 +26,12 @@ const db = await createRxDatabase<WorkoutDatabase>({
 })
 await db.addCollections({
   exercises: { schema: exerciseSchema },
-  sessions: { schema: sessionSchema },
+  sessions: {
+    schema: sessionSchema,
+    migrationStrategies: { 1: (doc) => ({ ...doc, plannedDay: null }) },
+  },
   setlogs: { schema: setLogSchema },
+  plans: { schema: planSchema },
 })
 
 const base = {
@@ -59,5 +66,18 @@ const sess = { id: sid, userId: 'u1', date: '2026-06-21', title: '', createdAt: 
 await Promise.all([db.sessions.upsert(sess), db.sessions.upsert(sess)])
 assert.equal(await db.sessions.count().exec(), 1, 'duplicate today-session collapses to one')
 
-console.log('✓ schema smoke passed (index sort, order-count, idempotent session)')
+// M3: plans collection builds + stores nested `days` as a JSON string; session
+// carries the v1 plannedDay field (default null after migration strategy).
+await db.plans.insert({
+  id: 'p1', userId: 'u1', name: 'PPL',
+  days: JSON.stringify([{ id: 'd1', label: 'Push', slots: [{ id: 's1', label: 'Chest', exercisePool: ['bench'] }] }]),
+  sourceShareCode: null, createdAt: '2026-06-21T00:00:00.000Z', updatedAt: '2026-06-21T00:00:00.000Z', deletedAt: null,
+})
+const plan = await db.plans.findOne('p1').exec()
+assert(plan, 'plan inserted')
+assert.equal(JSON.parse(plan.days)[0].slots[0].exercisePool[0], 'bench', 'plan days JSON round-trips')
+const sessDoc = await db.sessions.findOne(sid).exec()
+assert.equal(sessDoc?.plannedDay ?? null, null, 'session carries plannedDay (default null)')
+
+console.log('✓ schema smoke passed (index sort, order-count, idempotent session, plans + session v1)')
 await db.close()

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import {
@@ -20,12 +21,25 @@ export function Log() {
 
   const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<Exercise | null>(null)
+  const [params, setParams] = useSearchParams()
 
   // Whole catalog, queried live (empty for a beat while seedCatalog resolves).
   const exercises = useRxData<Exercise>(
     (db) => db.exercises.find(),
     [],
   )
+
+  // Deep-link from Today's plan checklist: ?ex=<id> preselects, then clears the
+  // param so the back button returns to the list instead of re-selecting.
+  const exParam = params.get('ex')
+  useEffect(() => {
+    if (!exParam || exercises.length === 0) return
+    const found = exercises.find((e) => e.id === exParam)
+    if (found) {
+      setPicked(found)
+      setParams({}, { replace: true })
+    }
+  }, [exParam, exercises, setParams])
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase()

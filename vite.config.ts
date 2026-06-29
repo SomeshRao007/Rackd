@@ -5,6 +5,15 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Pages Functions (auth + sync) can't run under Vite, so they're served by
+  // `npm run dev:api` (wrangler pages dev, :8788). Forward those paths to it so
+  // the single `npm run dev` origin (:5173) keeps HMR and the auth buttons work.
+  server: {
+    proxy: {
+      '/auth': 'http://localhost:8788',
+      '/sync': 'http://localhost:8788',
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),

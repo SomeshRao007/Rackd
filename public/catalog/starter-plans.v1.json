@@ -1,0 +1,212 @@
+[
+  {
+    "id": "starter-push-pull-legs",
+    "name": "Push / Pull / Legs",
+    "days": [
+      {
+        "id": "push-pull-legs-push",
+        "label": "Push",
+        "slots": [
+          {
+            "id": "push-pull-legs-push-chest",
+            "label": "Chest",
+            "exercisePool": [
+              "Barbell_Bench_Press_-_Medium_Grip",
+              "Dumbbell_Bench_Press",
+              "Decline_Barbell_Bench_Press"
+            ]
+          },
+          {
+            "id": "push-pull-legs-push-shoulders",
+            "label": "Shoulders",
+            "exercisePool": [
+              "Standing_Military_Press",
+              "Dumbbell_Shoulder_Press",
+              "Arnold_Dumbbell_Press"
+            ]
+          },
+          {
+            "id": "push-pull-legs-push-side-delts",
+            "label": "Side delts",
+            "exercisePool": [
+              "Side_Lateral_Raise",
+              "Seated_Side_Lateral_Raise"
+            ]
+          },
+          {
+            "id": "push-pull-legs-push-triceps",
+            "label": "Triceps",
+            "exercisePool": [
+              "Triceps_Pushdown",
+              "EZ-Bar_Skullcrusher",
+              "Standing_Dumbbell_Triceps_Extension"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "push-pull-legs-pull",
+        "label": "Pull",
+        "slots": [
+          {
+            "id": "push-pull-legs-pull-vertical-pull",
+            "label": "Vertical pull",
+            "exercisePool": [
+              "Wide-Grip_Lat_Pulldown",
+              "Pullups",
+              "Chin-Up"
+            ]
+          },
+          {
+            "id": "push-pull-legs-pull-horizontal-pull",
+            "label": "Horizontal pull",
+            "exercisePool": [
+              "Bent_Over_Barbell_Row",
+              "Seated_Cable_Rows",
+              "Bent_Over_Two-Dumbbell_Row"
+            ]
+          },
+          {
+            "id": "push-pull-legs-pull-rear-delts",
+            "label": "Rear delts",
+            "exercisePool": [
+              "Face_Pull",
+              "Cable_Rear_Delt_Fly"
+            ]
+          },
+          {
+            "id": "push-pull-legs-pull-biceps",
+            "label": "Biceps",
+            "exercisePool": [
+              "Barbell_Curl",
+              "Dumbbell_Bicep_Curl",
+              "Alternate_Hammer_Curl"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "push-pull-legs-legs",
+        "label": "Legs",
+        "slots": [
+          {
+            "id": "push-pull-legs-legs-quads",
+            "label": "Quads",
+            "exercisePool": [
+              "Barbell_Squat",
+              "Leg_Press",
+              "Leg_Extensions"
+            ]
+          },
+          {
+            "id": "push-pull-legs-legs-hamstrings",
+            "label": "Hamstrings",
+            "exercisePool": [
+              "Barbell_Deadlift",
+              "Lying_Leg_Curls"
+            ]
+          },
+          {
+            "id": "push-pull-legs-legs-calves",
+            "label": "Calves",
+            "exercisePool": [
+              "Standing_Calf_Raises",
+              "Rocking_Standing_Calf_Raise"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "starter-upper-lower",
+    "name": "Upper / Lower",
+    "days": [
+      {
+        "id": "upper-lower-upper",
+        "label": "Upper",
+        "slots": [
+          {
+            "id": "upper-lower-upper-chest",
+            "label": "Chest",
+            "exercisePool": [
+              "Barbell_Bench_Press_-_Medium_Grip",
+              "Dumbbell_Bench_Press"
+            ]
+          },
+          {
+            "id": "upper-lower-upper-back",
+            "label": "Back",
+            "exercisePool": [
+              "Bent_Over_Barbell_Row",
+              "Wide-Grip_Lat_Pulldown",
+              "Seated_Cable_Rows"
+            ]
+          },
+          {
+            "id": "upper-lower-upper-shoulders",
+            "label": "Shoulders",
+            "exercisePool": [
+              "Dumbbell_Shoulder_Press",
+              "Standing_Military_Press"
+            ]
+          },
+          {
+            "id": "upper-lower-upper-biceps",
+            "label": "Biceps",
+            "exercisePool": [
+              "Barbell_Curl",
+              "Alternate_Hammer_Curl"
+            ]
+          },
+          {
+            "id": "upper-lower-upper-triceps",
+            "label": "Triceps",
+            "exercisePool": [
+              "Triceps_Pushdown",
+              "EZ-Bar_Skullcrusher"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "upper-lower-lower",
+        "label": "Lower",
+        "slots": [
+          {
+            "id": "upper-lower-lower-quads",
+            "label": "Quads",
+            "exercisePool": [
+              "Barbell_Squat",
+              "Leg_Press"
+            ]
+          },
+          {
+            "id": "upper-lower-lower-hamstrings",
+            "label": "Hamstrings",
+            "exercisePool": [
+              "Barbell_Deadlift",
+              "Lying_Leg_Curls"
+            ]
+          },
+          {
+            "id": "upper-lower-lower-accessory",
+            "label": "Accessory",
+            "exercisePool": [
+              "Leg_Extensions",
+              "Barbell_Lunge"
+            ]
+          },
+          {
+            "id": "upper-lower-lower-calves",
+            "label": "Calves",
+            "exercisePool": [
+              "Standing_Calf_Raises",
+              "Rocking_Standing_Calf_Raise"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

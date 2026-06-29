@@ -8,7 +8,7 @@ import { getDb } from './database'
 // Checkpoint = the LWW key. Must match the server's (updatedAt, id) tuple.
 type Checkpoint = { id: string; updatedAt: string }
 
-const COLLECTIONS = ['sessions', 'setlogs'] as const
+const COLLECTIONS = ['sessions', 'setlogs', 'plans'] as const
 
 // Module-level so a stray double-start is a no-op and stopSync can cancel cleanly.
 let states: RxReplicationState<unknown, Checkpoint>[] = []

@@ -43,9 +43,12 @@ export type Exercise = ExtractDocumentTypeFromTypedRxJsonSchema<typeof exerciseT
 export const exerciseSchema: RxJsonSchema<Exercise> = exerciseSchemaLiteral
 
 // ── Session (per-user; one workout instance) ─────────────────────────────────
+// plannedDay (v1): JSON string of the locked plan day this session instances —
+//   { planId, dayId, label, picks: [{ slotLabel, exerciseId, exerciseName }] }.
+//   Stored as a string so it rides the flat-column /sync handler unchanged.
 const sessionSchemaLiteral = {
   title: 'session',
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -53,6 +56,7 @@ const sessionSchemaLiteral = {
     userId: { type: 'string', maxLength: 100 },
     date: { type: 'string', maxLength: 10 }, // YYYY-MM-DD
     title: { type: 'string' },
+    plannedDay: { type: ['string', 'null'] },
     createdAt: { type: 'string' },
     updatedAt: { type: 'string' },
     deletedAt: { type: ['string', 'null'] },
@@ -101,10 +105,43 @@ const setLogTyped = toTypedRxJsonSchema(setLogSchemaLiteral)
 export type SetLog = ExtractDocumentTypeFromTypedRxJsonSchema<typeof setLogTyped>
 export const setLogSchema: RxJsonSchema<SetLog> = setLogSchemaLiteral
 
+// ── Plan (per-user; named workout plan, the first freely-editable LWW record) ─
+// `days` is a JSON STRING (not a nested object) so the plan syncs through the flat
+// /sync handler with zero handler changes. Parsed shape:
+//   [{ id, label, slots: [{ id, label, exercisePool: [exerciseId] }] }]
+// sourceShareCode records provenance when the plan was adopted from a share/starter.
+const planSchemaLiteral = {
+  title: 'plan',
+  version: 0,
+  primaryKey: 'id',
+  type: 'object',
+  properties: {
+    id: { type: 'string', maxLength: 100 },
+    userId: { type: 'string', maxLength: 100 },
+    name: { type: 'string' },
+    days: { type: 'string' },
+    sourceShareCode: { type: ['string', 'null'] },
+    createdAt: { type: 'string' },
+    updatedAt: { type: 'string' },
+    deletedAt: { type: ['string', 'null'] },
+  },
+  required: ['id', 'userId', 'name', 'days', 'createdAt', 'updatedAt'],
+} as const
+const planTyped = toTypedRxJsonSchema(planSchemaLiteral)
+export type Plan = ExtractDocumentTypeFromTypedRxJsonSchema<typeof planTyped>
+export const planSchema: RxJsonSchema<Plan> = planSchemaLiteral
+
+// Parsed `days` shapes — the in-memory contract for the builder + rotation.
+export type PlanSlot = { id: string; label: string; exercisePool: string[] }
+export type PlanDay = { id: string; label: string; slots: PlanSlot[] }
+export type PlannedPick = { slotId: string; slotLabel: string; exerciseId: string; exerciseName: string }
+export type PlannedDay = { planId: string; dayId: string; label: string; picks: PlannedPick[] }
+
 // ── Collection + database types (the contract subagents import) ──────────────
 export type WorkoutCollections = {
   exercises: RxCollection<Exercise>
   sessions: RxCollection<Session>
   setlogs: RxCollection<SetLog>
+  plans: RxCollection<Plan>
 }
 export type WorkoutDatabase = RxDatabase<WorkoutCollections>
