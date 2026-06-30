@@ -123,6 +123,18 @@ export async function lockDay(userId: string, planned: PlannedDay): Promise<void
   if (doc) await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
 }
 
+/** Set a slot's per-session minimum-sets target on the locked day. minSets <= 0 clears it. */
+export async function setPickMinSets(sessionId: string, slotId: string, minSets: number): Promise<void> {
+  const db = await getDb()
+  const doc = await db.sessions.findOne(sessionId).exec()
+  if (!doc?.plannedDay) return
+  const planned = JSON.parse(doc.plannedDay) as PlannedDay
+  planned.picks = planned.picks.map((p) =>
+    p.slotId === slotId ? { ...p, minSets: minSets > 0 ? minSets : undefined } : p,
+  )
+  await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
+}
+
 // ── Sharing (relative URLs → browser-correct; the node test shims a BASE) ───────
 async function shareAuth(path: string, init: RequestInit, token: string) {
   const res = await fetch(path, {

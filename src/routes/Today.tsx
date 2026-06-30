@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import type { SetLog, PlannedDay } from '../db/schema'
-import { useUnit, formatWeight } from '../lib/units'
-import { groupByExercise, totalVolumeKg } from '../components/groupSets'
+import { type Unit, useUnit, formatWeight } from '../lib/units'
+import { groupByExercise, totalVolumeKg, type ExerciseGroup } from '../components/groupSets'
 import { SetRow } from '../components/SetRow'
+import { PlannedExerciseRow } from '../components/PlannedExerciseRow'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -44,11 +45,12 @@ export function Today() {
 
   const groups = useMemo(() => groupByExercise(sets), [sets])
   const volumeKg = useMemo(() => totalVolumeKg(sets), [sets])
-  const setCount = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const g of groups) m.set(g.exerciseId, g.sets.length)
-    return m
-  }, [groups])
+  // lifts logged outside the plan still surface, under "Also logged".
+  const extraGroups = useMemo(() => {
+    if (!planned) return groups
+    const inPlan = new Set(planned.picks.map((p) => p.exerciseId))
+    return groups.filter((g) => !inPlan.has(g.exerciseId))
+  }, [groups, planned])
 
   return (
     <section>
@@ -58,62 +60,59 @@ export function Today() {
         {planned && <span className="ml-2 font-bold text-amber">· {planned.label}</span>}
       </p>
 
-      {planned && (
-        <ul className="mt-5 space-y-1.5">
-          {planned.picks.map((pick) => {
-            const n = setCount.get(pick.exerciseId) ?? 0
-            return (
-              <li key={pick.slotId}>
-                <Link
-                  to={`/app/log?ex=${encodeURIComponent(pick.exerciseId)}`}
-                  className="flex items-center gap-3 rounded-xl bg-steel-900 px-4 py-3 transition-colors hover:bg-steel-800"
-                >
-                  <span
-                    className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-black ${
-                      n > 0 ? 'bg-amber text-ink' : 'border border-steel-700 text-fog'
-                    }`}
-                  >
-                    {n > 0 ? n : ''}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold">{pick.exerciseName}</span>
-                    <span className="text-xs uppercase tracking-wide text-fog">{pick.slotLabel}</span>
-                  </span>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-steel-600">
-                    <path d="m9 18 6-6-6-6" />
-                  </svg>
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-
-      {sets.length === 0 ? (
-        planned ? null : <EmptyToday />
+      {planned && sessionId ? (
+        <>
+          {sets.length > 0 && <Stats sets={sets.length} lifts={groups.length} volume={formatWeight(volumeKg, unit)} />}
+          <ul className="mt-5 space-y-2">
+            {planned.picks.map((pick) => (
+              <PlannedExerciseRow key={pick.slotId} pick={pick} sessionId={sessionId} userId={userId} />
+            ))}
+          </ul>
+          {extraGroups.length > 0 && (
+            <div className="mt-7">
+              <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-fog">Also logged</h2>
+              <LoggedGroups groups={extraGroups} unit={unit} />
+            </div>
+          )}
+        </>
+      ) : sets.length === 0 ? (
+        <EmptyToday />
       ) : (
         <>
-          <div className="mt-5 grid grid-cols-3 gap-3">
-            <Stat value={sets.length} label="sets" />
-            <Stat value={groups.length} label="lifts" />
-            <Stat value={formatWeight(volumeKg, unit)} label="volume" wide />
-          </div>
-
-          <div className="mt-6 space-y-5">
-            {groups.map((g) => (
-              <div key={g.exerciseId}>
-                <h2 className="mb-2 font-display text-lg font-bold">{g.exerciseName}</h2>
-                <ul className="space-y-1.5">
-                  {g.sets.map((s, i) => (
-                    <SetRow key={s.id} set={s} index={i} unit={unit} />
-                  ))}
-                </ul>
-              </div>
-            ))}
+          <Stats sets={sets.length} lifts={groups.length} volume={formatWeight(volumeKg, unit)} />
+          <div className="mt-6">
+            <LoggedGroups groups={groups} unit={unit} />
           </div>
         </>
       )}
     </section>
+  )
+}
+
+function Stats({ sets, lifts, volume }: { sets: number; lifts: number; volume: string }) {
+  return (
+    <div className="mt-5 grid grid-cols-3 gap-3">
+      <Stat value={sets} label="sets" />
+      <Stat value={lifts} label="lifts" />
+      <Stat value={volume} label="volume" wide />
+    </div>
+  )
+}
+
+function LoggedGroups({ groups, unit }: { groups: ExerciseGroup[]; unit: Unit }) {
+  return (
+    <div className="space-y-5">
+      {groups.map((g) => (
+        <div key={g.exerciseId}>
+          <h2 className="mb-2 font-display text-lg font-bold">{g.exerciseName}</h2>
+          <ul className="space-y-1.5">
+            {g.sets.map((s, i) => (
+              <SetRow key={s.id} set={s} index={i} unit={unit} />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   )
 }
 

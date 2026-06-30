@@ -107,11 +107,13 @@ npm run test    # sync replication test
    When you start a day, the app picks the least-recently-trained exercise from each pool.
    You can preview and swap picks before locking the day. Share your plans with other users
    via a stable share code; they can adopt a copy into their own plans.
-3. **Log** — search the exercise catalog, pick a lift, enter weight + reps per set.
-   Last session's numbers for that exercise are pre-filled. If you're following a plan,
-   the locked day shows as a checklist above the free-form log.
-4. **Today** — today's sets, grouped by exercise, with set count / lift count / total volume.
-5. **History** — past sessions.
+3. **Today** — When a plan day is locked, each planned exercise appears as an inline mini-logger:
+   tap a row to expand it, set a per-exercise minimum-sets target, and log weight × reps right there.
+   Rows turn green once you've logged the target number of sets. Any lifts logged outside the plan
+   appear under "Also logged". Stats show today's total set count, lift count, and volume.
+4. **Log** — Search the exercise catalog and log weight + reps per set (logging is now inline on Today
+   when following a plan). Last session's numbers for that exercise are pre-filled.
+5. **History** — Past sessions.
 6. Toggle kg/lb anytime from the header. Export all your data as JSON from the same header.
 
 Data lives on your device first. If you're signed in and online, it syncs to your other

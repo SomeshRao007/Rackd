@@ -134,7 +134,13 @@ export const planSchema: RxJsonSchema<Plan> = planSchemaLiteral
 // Parsed `days` shapes — the in-memory contract for the builder + rotation.
 export type PlanSlot = { id: string; label: string; exercisePool: string[] }
 export type PlanDay = { id: string; label: string; slots: PlanSlot[] }
-export type PlannedPick = { slotId: string; slotLabel: string; exerciseId: string; exerciseName: string }
+export type PlannedPick = {
+  slotId: string
+  slotLabel: string
+  exerciseId: string
+  exerciseName: string
+  minSets?: number // per-session set target; row turns green once this many sets are logged
+}
 export type PlannedDay = { planId: string; dayId: string; label: string; picks: PlannedPick[] }
 
 // ── Collection + database types (the contract subagents import) ──────────────
