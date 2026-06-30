@@ -4,12 +4,7 @@ import type { Session, SetLog } from './schema'
 const now = () => new Date().toISOString()
 const today = () => new Date().toISOString().slice(0, 10) // YYYY-MM-DD
 
-/**
- * Get (or create) today's session for this user.
- * The id is a deterministic natural key `userId_date` so this is idempotent and
- * race-proof: concurrent callers (e.g. React StrictMode's double-invoked effect)
- * resolve to the SAME session instead of creating duplicates.
- */
+// Get-or-create today's session. Id is a deterministic `userId_date` key, so concurrent callers (e.g. StrictMode's double-invoked effect) collapse to one row instead of duplicating.
 export async function getOrCreateTodaySession(userId: string): Promise<Session> {
   const db = await getDb()
   const id = `${userId}_${today()}`
@@ -29,10 +24,7 @@ export async function getOrCreateTodaySession(userId: string): Promise<Session> 
   return doc.toJSON() as Session
 }
 
-/**
- * Append a logged set (append-only — never mutates existing sets).
- * `order` is the next position within the session.
- */
+// Append a logged set (append-only); `order` is its position within the session.
 export async function logSet(input: {
   userId: string
   sessionId: string
@@ -42,9 +34,7 @@ export async function logSet(input: {
   reps: number
 }): Promise<SetLog> {
   const db = await getDb()
-  // count by sessionId only — hits the index (RxDB count needs a full index
-  // match, error QU14 otherwise). `order` is a monotonic position; gaps left by
-  // soft-deleted sets are harmless, so we don't filter deletedAt here.
+  // count by sessionId only so it hits the index (RxDB count needs a full index match, else QU14); soft-deleted gaps in `order` are harmless.
   const count = await db.setlogs
     .count({ selector: { sessionId: input.sessionId } })
     .exec()

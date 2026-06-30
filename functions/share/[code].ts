@@ -5,8 +5,7 @@ type Env = { DB: D1Database; JWT_SECRET: string }
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 
-/** Fetch a shared plan snapshot by code. Auth-required (adopter copies it into their
- *  own plans). Returns { name, days, shareCode } — the input to adoptPlan. */
+/** Fetch a shared plan snapshot by code (auth-required); returns { name, days, shareCode } for adoptPlan. */
 export const onRequestGet: PagesFunction<Env> = async ({ request, env, params }) => {
   const uid = await authUserId(request, env.JWT_SECRET)
   if (!uid) return json({ error: 'unauthorized' }, 401)

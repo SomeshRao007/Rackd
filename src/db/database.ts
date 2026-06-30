@@ -14,8 +14,7 @@ addRxPlugin(RxDBMigrationSchemaPlugin)
 async function makeStorage(): Promise<RxStorage<unknown, unknown>> {
   const storage = getRxStorageDexie()
   if (!import.meta.env.DEV) return storage
-  // dev-mode adds usage/schema checks; it *requires* a validator-wrapped storage
-  // (RxDB error DVM1). Both are dev-only — stripped from the prod bundle.
+  // dev-mode needs a validator-wrapped storage (RxDB error DVM1); both are dev-only, stripped from prod.
   const { RxDBDevModePlugin } = await import('rxdb/plugins/dev-mode')
   const { wrappedValidateAjvStorage } = await import('rxdb/plugins/validate-ajv')
   addRxPlugin(RxDBDevModePlugin)

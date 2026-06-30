@@ -5,8 +5,7 @@ type Env = { DB: D1Database; JWT_SECRET: string }
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 
-/** Publish a plan as an immutable shared snapshot. Owner-only writer keyed by
- *  (ownerUserId, planId), so re-publishing keeps the same shareCode. No LWW. */
+/** Publish a plan as an immutable shared snapshot, keyed by (ownerUserId, planId) so re-publishing keeps the same shareCode. */
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const uid = await authUserId(request, env.JWT_SECRET)
   if (!uid) return json({ error: 'unauthorized' }, 401)

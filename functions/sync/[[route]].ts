@@ -4,8 +4,7 @@ type Env = { DB: D1Database; JWT_SECRET: string }
 type Checkpoint = { id: string; updatedAt: string } | null
 type Row = Record<string, unknown>
 
-// Synced collections and their columns (id first). userId is forced from the JWT,
-// never trusted from the client body — this is the per-user isolation boundary.
+// Synced collections and their columns (id first); userId is forced from the JWT, never the client body — the per-user isolation boundary.
 const TABLES: Record<string, string[]> = {
   sessions: ['id', 'userId', 'date', 'title', 'plannedDay', 'createdAt', 'updatedAt', 'deletedAt'],
   setlogs: ['id', 'userId', 'sessionId', 'exerciseId', 'exerciseName', 'weightKg', 'reps', 'order', 'createdAt', 'updatedAt', 'deletedAt'],
@@ -19,8 +18,7 @@ const q = (c: string) => (c === 'order' ? '"order"' : c)
 export const lwwWins = (incomingUpdatedAt: string, masterUpdatedAt: string): boolean =>
   incomingUpdatedAt > masterUpdatedAt
 
-// D1 row → RxDB doc. We never hard-delete, so _deleted is always false; the tombstone
-// rides in the deletedAt field and syncs as an ordinary LWW value.
+// D1 row → RxDB doc; we never hard-delete, so _deleted is always false and the tombstone rides in deletedAt as an ordinary LWW value.
 const toDoc = (row: Row) => ({ ...row, _deleted: false })
 
 async function authUserId(request: Request, env: Env): Promise<string | null> {
@@ -83,8 +81,7 @@ async function push(table: string, env: Env, uid: string, body: { rows?: { newDo
   })
   await env.DB.batch(stmts)
 
-  // Conflicts = master rows that ended up newer than what the client tried to write,
-  // so RxDB reconciles to server state immediately instead of waiting for the next pull.
+  // Conflicts = master rows newer than what the client pushed, so RxDB reconciles to server state without waiting for the next pull.
   const sel = cols.map(q).join(', ')
   const inClause = ids.map((_, i) => `?${i + 2}`).join(', ')
   const { results } = await env.DB

@@ -6,8 +6,7 @@ import { setPickMinSets } from '../db/plans'
 import { type Unit, useUnit, unitToKg, kgToUnit, formatWeight } from '../lib/units'
 import { SetRow } from './SetRow'
 
-/** One planned exercise on Today: a collapsed counter that expands into an inline
- *  mini-logger (set min sets + log weight×reps). Turns green once min sets are logged. */
+/** One planned exercise on Today: a collapsed counter expanding into an inline mini-logger; turns green once min sets are logged. */
 export function PlannedExerciseRow({
   pick,
   sessionId,

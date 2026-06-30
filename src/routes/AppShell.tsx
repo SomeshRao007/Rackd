@@ -6,8 +6,7 @@ import { startSync, stopSync } from '../db/sync'
 import { useAuth } from '../auth/AuthContext'
 import { useUnit, setUnit } from '../lib/units'
 
-// Sync only runs against a real backend: prod, or `VITE_SYNC=1` under wrangler. Plain
-// `npm run dev` has no Pages Functions, so it stays off.
+// Sync only runs against a real backend (prod, or VITE_SYNC=1 under wrangler); plain `npm run dev` has no Pages Functions, so it stays off.
 const SYNC_ON = import.meta.env.PROD || import.meta.env.VITE_SYNC === '1'
 
 const NAV = [

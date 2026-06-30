@@ -126,9 +126,7 @@ function Logger({
   const [reps, setReps] = useState('')
   const repsRef = useRef<HTMLInputElement>(null)
 
-  // Auto-fill: fires once per exercise selection (component is keyed by id).
-  // Seeds inputs from the last logged set; never re-runs after a log so
-  // repeated sets keep what the user typed.
+  // Auto-fill once per exercise selection (component is keyed by id): seed inputs from the last logged set, never re-running so repeated sets keep what the user typed.
   useEffect(() => {
     let alive = true
     Promise.all([
@@ -149,8 +147,7 @@ function Logger({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, exercise.id])
 
-  // If the unit is toggled mid-entry, convert the typed weight in place so the
-  // number always matches the label (else "80" under a LB label logs as 80 lb).
+  // On a mid-entry unit toggle, convert the typed weight in place so it matches the label (else "80" under LB logs as 80 lb).
   const prevUnit = useRef(unit)
   useEffect(() => {
     if (prevUnit.current === unit) return

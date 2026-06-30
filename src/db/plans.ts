@@ -4,13 +4,7 @@ import type { Plan, PlanDay, PlannedDay, PlannedPick } from './schema'
 
 const now = () => new Date().toISOString()
 
-/**
- * Rotation core (pure → unit-tested in scripts/rotation-test.ts).
- * Pick the least-recently-trained exercise in a slot's pool:
- *   - never-trained (null) maps to '' which sorts before any ISO date → picked first;
- *   - otherwise the oldest createdAt wins;
- *   - ties resolve to pool order (we only replace on a STRICTLY smaller timestamp).
- */
+// Rotation core (pure; unit-tested in scripts/rotation-test.ts): pick the least-recently-trained exercise — never-trained ('') sorts first, else oldest createdAt wins, ties keep pool order (replace only on strictly smaller).
 export function pickLeastRecent(
   pool: string[],
   lastTrainedAt: Record<string, string | null>,
@@ -61,11 +55,7 @@ export async function deletePlan(id: string): Promise<void> {
   if (doc) await doc.patch({ deletedAt: now(), updatedAt: now() })
 }
 
-/**
- * Copy a plan snapshot into this user's own editable plan (copy-on-use).
- * One path for both a starter-file plan (days is a nested object) and a shared-code
- * plan (days is already a JSON string) — normalize `days` to a string either way.
- */
+// Copy a plan snapshot into the user's own editable plan; normalize `days` to a string (starter = nested object, shared-code = already a string).
 export async function adoptPlan(
   userId: string,
   snapshot: { name: string; days: string | PlanDay[]; shareCode?: string },
@@ -86,10 +76,7 @@ export async function adoptPlan(
   return plan
 }
 
-/**
- * Propose the picks for a plan day — one exercise per slot, derived from set history.
- * No persisted rotation state: the rotation key is just the last-trained timestamp.
- */
+// Propose picks for a plan day — one exercise per slot, chosen by last-trained timestamp (no persisted rotation state).
 export async function resolveDay(
   plan: Plan,
   dayId: string,

@@ -100,8 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loginWithPassword: (email, password) => authPost('/auth/login', email, password),
       signIn: () => {
         if (STUB) {
-          // Built (PROD, incl. `wrangler pages dev`): get a REAL JWT from the dev-only
-          // function so sync uses the same verified path as production.
+          // Built (incl. `wrangler pages dev`): get a REAL JWT from the dev-only function so sync uses the same verified path as prod.
           if (import.meta.env.PROD) {
             window.location.href = '/auth/dev-login'
             return

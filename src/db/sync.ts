@@ -25,8 +25,7 @@ async function authedPost(path: string, body: unknown, token: string) {
   return res.json()
 }
 
-/** Replicate one collection to /sync/{pull,push}/<name>. Exported so the M2 test
- *  exercises the exact shipping handlers rather than a copy. */
+/** Replicate one collection to /sync/{pull,push}/<name>. Exported so the M2 test hits the real handlers. */
 export function replicateCollection(
   collection: RxCollection,
   name: string,

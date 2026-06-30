@@ -1,8 +1,6 @@
 import { mintAppJwt } from '../lib/jwt'
 
-// Dev-only: mints a REAL HS256 app JWT for the stub user so local sync uses the same
-// verification path as production. Gated on AUTH_STUB=1 (set only in .dev.vars); returns
-// 404 in prod where that var is unset, so there is no auth-bypass branch in /sync itself.
+// Dev-only: mints a real app JWT for the stub user (same verify path as prod), gated on AUTH_STUB=1 so it 404s in prod — no auth-bypass branch in /sync.
 type Env = { JWT_SECRET: string; AUTH_STUB?: string }
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {

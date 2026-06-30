@@ -1,6 +1,4 @@
-// Password hashing with PBKDF2 via the Workers-native WebCrypto (no bcrypt dependency).
-// Stored as a self-describing PHC string so the iteration count travels with each hash
-// and can be raised later without a migration.
+// PBKDF2 password hashing via Workers WebCrypto (no bcrypt dep); the self-describing PHC string carries the iteration count so it can be raised later without a migration.
 // ponytail: no per-account rate limiting — family scale. Add a KV/D1 attempt counter if abused.
 
 const ITERATIONS = 100_000 // PBKDF2-SHA256; tune up to the Workers CPU budget, stored per-hash

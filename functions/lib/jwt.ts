@@ -11,8 +11,7 @@ export function mintAppJwt(claims: AppClaims, secret: string): Promise<string> {
     .sign(new TextEncoder().encode(secret))
 }
 
-/** Verify a request's Bearer token and return its `sub` (userId), or null.
- *  The verify throw is the trust boundary — forged/expired → null → 401. */
+/** Verify a request's Bearer token, returning its `sub` (userId) or null; the verify throw is the trust boundary (forged/expired → 401). */
 export async function authUserId(request: Request, secret: string): Promise<string | null> {
   const header = request.headers.get('Authorization') ?? ''
   if (!header.startsWith('Bearer ')) return null

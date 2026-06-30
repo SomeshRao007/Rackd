@@ -6,14 +6,7 @@ import {
   type RxDatabase,
 } from 'rxdb'
 
-/**
- * Sync metadata carried by every per-user record (note 02 "lean recipe").
- * Present from M1 even though replication lands in M2 — keeps M2 purely additive.
- *   id        client-generated UUID (stable identity before first sync)
- *   userId    owner; per-user isolation boundary
- *   createdAt / updatedAt  ISO strings (lexicographic compare == LWW key)
- *   deletedAt soft-delete tombstone (null = live)
- */
+// Every per-user record carries sync metadata: id (client UUID), userId (isolation boundary), createdAt/updatedAt (ISO; lexicographic compare = LWW key), deletedAt (soft-delete tombstone, null = live).
 
 // ── Exercise (catalog, read-only; seeded from free-exercise-db) ──────────────
 const exerciseSchemaLiteral = {
@@ -43,9 +36,7 @@ export type Exercise = ExtractDocumentTypeFromTypedRxJsonSchema<typeof exerciseT
 export const exerciseSchema: RxJsonSchema<Exercise> = exerciseSchemaLiteral
 
 // ── Session (per-user; one workout instance) ─────────────────────────────────
-// plannedDay (v1): JSON string of the locked plan day this session instances —
-//   { planId, dayId, label, picks: [{ slotLabel, exerciseId, exerciseName }] }.
-//   Stored as a string so it rides the flat-column /sync handler unchanged.
+// plannedDay (v1): the locked plan day, stored as a JSON string so it rides the flat-column /sync handler unchanged.
 const sessionSchemaLiteral = {
   title: 'session',
   version: 1,
@@ -106,10 +97,7 @@ export type SetLog = ExtractDocumentTypeFromTypedRxJsonSchema<typeof setLogTyped
 export const setLogSchema: RxJsonSchema<SetLog> = setLogSchemaLiteral
 
 // ── Plan (per-user; named workout plan, the first freely-editable LWW record) ─
-// `days` is a JSON STRING (not a nested object) so the plan syncs through the flat
-// /sync handler with zero handler changes. Parsed shape:
-//   [{ id, label, slots: [{ id, label, exercisePool: [exerciseId] }] }]
-// sourceShareCode records provenance when the plan was adopted from a share/starter.
+// `days` is a JSON STRING (not nested) so the plan syncs through the flat /sync handler unchanged; sourceShareCode records share/starter provenance.
 const planSchemaLiteral = {
   title: 'plan',
   version: 0,
