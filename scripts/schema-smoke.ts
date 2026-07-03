@@ -31,8 +31,14 @@ await db.addCollections({
     schema: sessionSchema,
     migrationStrategies: { 1: (doc) => ({ ...doc, plannedDay: null }) },
   },
-  setlogs: { schema: setLogSchema },
-  plans: { schema: planSchema },
+  setlogs: {
+    schema: setLogSchema,
+    migrationStrategies: { 1: (doc) => ({ ...doc, rir: null, note: null }) },
+  },
+  plans: {
+    schema: planSchema,
+    migrationStrategies: { 1: (doc) => ({ ...doc, scheme: null }) },
+  },
   exclusions: { schema: exclusionSchema },
 })
 
@@ -81,5 +87,20 @@ assert.equal(JSON.parse(plan.days)[0].slots[0].exercisePool[0], 'bench', 'plan d
 const sessDoc = await db.sessions.findOne(sid).exec()
 assert.equal(sessDoc?.plannedDay ?? null, null, 'session carries plannedDay (default null)')
 
-console.log('✓ schema smoke passed (index sort, order-count, idempotent session, plans + session v1)')
+// M5: setlog v1 carries nullable rir/note; plan v1 carries the nullable scheme (patchable).
+await db.setlogs.insert({ ...base, id: '3', order: 2, weightKg: 70, rir: 2, note: 'felt heavy', createdAt: '2026-06-22T10:00:00.000Z', updatedAt: '2026-06-22T10:00:00.000Z' })
+const withRir = await db.setlogs.findOne('3').exec()
+assert.equal(withRir?.rir, 2, 'rir round-trips')
+assert.equal(withRir?.note, 'felt heavy', 'note round-trips')
+
+await db.plans.insert({
+  id: 'p2', userId: 'u1', name: 'Linear', days: '[]', sourceShareCode: null, scheme: null,
+  createdAt: '2026-06-22T00:00:00.000Z', updatedAt: '2026-06-22T00:00:00.000Z', deletedAt: null,
+})
+const p2 = await db.plans.findOne('p2').exec()
+assert.equal(p2?.scheme ?? null, null, 'plan scheme null round-trips')
+await p2!.patch({ scheme: 'linear', updatedAt: '2026-06-22T00:00:01.000Z' })
+assert.equal((await db.plans.findOne('p2').exec())?.scheme, 'linear', 'plan scheme patch round-trips')
+
+console.log('✓ schema smoke passed (index sort, order-count, idempotent session, plans + session v1, setlog rir/note + plan scheme v1)')
 await db.close()

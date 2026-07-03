@@ -7,8 +7,8 @@ type Row = Record<string, unknown>
 // Synced collections and their columns (id first); userId is forced from the JWT, never the client body — the per-user isolation boundary.
 const TABLES: Record<string, string[]> = {
   sessions: ['id', 'userId', 'date', 'title', 'plannedDay', 'createdAt', 'updatedAt', 'deletedAt'],
-  setlogs: ['id', 'userId', 'sessionId', 'exerciseId', 'exerciseName', 'weightKg', 'reps', 'order', 'createdAt', 'updatedAt', 'deletedAt'],
-  plans: ['id', 'userId', 'name', 'days', 'sourceShareCode', 'createdAt', 'updatedAt', 'deletedAt'],
+  setlogs: ['id', 'userId', 'sessionId', 'exerciseId', 'exerciseName', 'weightKg', 'reps', 'order', 'rir', 'note', 'createdAt', 'updatedAt', 'deletedAt'],
+  plans: ['id', 'userId', 'name', 'days', 'sourceShareCode', 'scheme', 'createdAt', 'updatedAt', 'deletedAt'],
   exclusions: ['id', 'userId', 'kind', 'value', 'label', 'until', 'createdAt', 'updatedAt', 'deletedAt'],
 }
 

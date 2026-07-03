@@ -1,8 +1,11 @@
 import { getDb } from './database'
-import type { Session, SetLog } from './schema'
+import { suggestNext, deloadDue, type Suggestion } from '../lib/suggest'
+import { todayISO, weekIndex } from '../lib/dates'
+import type { PlannedDay, SchemeId, Session, SetLog } from './schema'
 
 const now = () => new Date().toISOString()
 const today = () => new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10)
 
 // Get-or-create today's session. Id is a deterministic `userId_date` key, so concurrent callers (e.g. StrictMode's double-invoked effect) collapse to one row instead of duplicating.
 export async function getOrCreateTodaySession(userId: string): Promise<Session> {
@@ -32,6 +35,8 @@ export async function logSet(input: {
   exerciseName: string
   weightKg: number
   reps: number
+  rir?: number | null
+  note?: string | null
 }): Promise<SetLog> {
   const db = await getDb()
   // count by sessionId only so it hits the index (RxDB count needs a full index match, else QU14); soft-deleted gaps in `order` are harmless.
@@ -42,6 +47,9 @@ export async function logSet(input: {
   const set: SetLog = {
     id: crypto.randomUUID(),
     ...input,
+    // explicit after the spread — an undefined-valued key fails the dev-mode ajv validator
+    rir: input.rir ?? null,
+    note: input.note ?? null,
     order: count,
     createdAt: ts,
     updatedAt: ts,
@@ -64,6 +72,75 @@ export async function lastSetFor(
     })
     .exec()
   return doc ? (doc.toJSON() as SetLog) : null
+}
+
+/** Recent sets for an exercise, newest first — feeds suggestNext (M5). Rides the composite index. */
+export async function historyFor(
+  userId: string,
+  exerciseId: string,
+  limit = 60,
+): Promise<SetLog[]> {
+  const db = await getDb()
+  const docs = await db.setlogs
+    .find({
+      selector: { userId, exerciseId, deletedAt: null },
+      sort: [{ createdAt: 'desc' }],
+      limit,
+    })
+    .exec()
+  return docs.map((d) => d.toJSON() as SetLog)
+}
+
+/** Next-load suggestion for an exercise under the plan's progression scheme (M5). */
+export async function suggestFor(
+  userId: string,
+  exerciseId: string,
+  scheme: SchemeId,
+  deload = false,
+): Promise<Suggestion | null> {
+  const history = await historyFor(userId, exerciseId)
+  return suggestNext({ history, scheme, today: todayISO(), deload })
+}
+
+// JSON.parse is the one boundary here that can throw (corrupt synced string) — contain it.
+function parsePlannedDay(json: string | null | undefined): PlannedDay | null {
+  if (!json) return null
+  try {
+    return JSON.parse(json) as PlannedDay
+  } catch {
+    return null
+  }
+}
+
+/** Deload-banner input (M5): weeks trained since the last accepted deload + recent RIR trend. */
+export async function deloadStatus(userId: string): Promise<string | null> {
+  const db = await getDb()
+  // ponytail: unindexed createdAt scan — bounded to 56 days of one user's sets, once per StartDay visit.
+  const logs = await db.setlogs
+    .find({ selector: { userId, deletedAt: null, createdAt: { $gte: daysAgo(56) } } })
+    .exec()
+
+  // Newest session whose locked day was accepted as a deload — the stateless deload history.
+  const sessions = await db.sessions
+    .find({ selector: { userId, deletedAt: null }, sort: [{ date: 'desc' }], limit: 60 })
+    .exec()
+  let lastDeloadWeek = -Infinity
+  for (const s of sessions) {
+    if (parsePlannedDay(s.plannedDay)?.deload === true) {
+      lastDeloadWeek = weekIndex(s.date)
+      break
+    }
+  }
+
+  const weeks = new Set(logs.map((l) => weekIndex(l.createdAt.slice(0, 10))))
+  const trainedWeeks = [...weeks].filter((w) => w > lastDeloadWeek).sort((a, b) => b - a)
+
+  const cutoff14 = daysAgo(14)
+  const recentRirs = logs
+    .filter((l) => l.createdAt >= cutoff14 && l.rir != null)
+    .map((l) => l.rir as number)
+
+  return deloadDue({ trainedWeeks, currentWeek: weekIndex(todayISO()), recentRirs })
 }
 
 /** Soft-delete a set (tombstone, so the delete syncs in M2). */

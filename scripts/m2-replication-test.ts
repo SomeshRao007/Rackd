@@ -57,7 +57,10 @@ async function makeDb(name: string) {
       schema: sessionSchema,
       migrationStrategies: { 1: (doc) => ({ ...doc, plannedDay: null }) },
     },
-    setlogs: { schema: setLogSchema },
+    setlogs: {
+      schema: setLogSchema,
+      migrationStrategies: { 1: (doc) => ({ ...doc, rir: null, note: null }) },
+    },
   })
   return db
 }

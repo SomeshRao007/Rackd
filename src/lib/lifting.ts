@@ -43,3 +43,11 @@ export function platesFor(
   }
   return out // remainder (perSide > 0) is unreachable with the given plates — closest stack
 }
+
+/** Epley e1RM, RIR-adjusted: reps done + reps left in the tank. */
+export const epley1RM = (kg: number, reps: number, rir = 0): number =>
+  kg * (1 + (reps + rir) / 30)
+
+/** Round to the nearest equipment increment (default 2.5 kg). */
+export const roundToStep = (kg: number, step = 2.5): number =>
+  Math.round(kg / step) * step

@@ -61,9 +61,10 @@ export const sessionSchema: RxJsonSchema<Session> = sessionSchemaLiteral
 
 // ── SetLog (per-user, append-only; one logged set) ───────────────────────────
 // weight is stored canonically in KILOGRAMS; the UI converts for lb display.
+// v1 (M5): nullable rir (reps-in-reserve, 0–5) + note — inputs to load auto-progression.
 const setLogSchemaLiteral = {
   title: 'setlog',
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -75,6 +76,8 @@ const setLogSchemaLiteral = {
     weightKg: { type: 'number' },
     reps: { type: 'number' },
     order: { type: 'number' },
+    rir: { type: ['number', 'null'], minimum: 0, maximum: 5 },
+    note: { type: ['string', 'null'] },
     createdAt: { type: 'string', maxLength: 30 }, // ISO; indexed for sort
     updatedAt: { type: 'string' },
     deletedAt: { type: ['string', 'null'] },
@@ -100,7 +103,7 @@ export const setLogSchema: RxJsonSchema<SetLog> = setLogSchemaLiteral
 // `days` is a JSON STRING (not nested) so the plan syncs through the flat /sync handler unchanged; sourceShareCode records share/starter provenance.
 const planSchemaLiteral = {
   title: 'plan',
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -109,6 +112,7 @@ const planSchemaLiteral = {
     name: { type: 'string' },
     days: { type: 'string' },
     sourceShareCode: { type: ['string', 'null'] },
+    scheme: { type: ['string', 'null'] }, // per-plan progression scheme (M5); null = double default
     createdAt: { type: 'string' },
     updatedAt: { type: 'string' },
     deletedAt: { type: ['string', 'null'] },
@@ -161,6 +165,8 @@ export type PlannedPick = {
 }
 // warmup/cooldown: derived mobility stretches (exerciseId + hold seconds), M4 R8.
 export type MobilityStep = { exerciseId: string; sec: number }
+// Per-plan progression scheme (M5); 'wave' is a future member.
+export type SchemeId = 'double' | 'linear'
 export type PlannedDay = {
   planId: string
   dayId: string
@@ -168,6 +174,8 @@ export type PlannedDay = {
   picks: PlannedPick[]
   warmup?: MobilityStep[]
   cooldown?: MobilityStep[]
+  scheme?: SchemeId // progression scheme snapshotted at lock time (M5)
+  deload?: boolean // locked day accepted as a deload — the stateless deload history (M5)
 }
 
 // ── Collection + database types (the contract subagents import) ──────────────

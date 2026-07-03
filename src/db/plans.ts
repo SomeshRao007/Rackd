@@ -2,7 +2,7 @@ import { getDb } from './database'
 import { getOrCreateTodaySession, lastSetFor } from './actions'
 import { getPrefs, equipmentAvailable } from '../lib/prefs'
 import { activeExclusions } from './exclusions'
-import type { Plan, PlanDay, PlannedDay, PlannedPick, Exercise } from './schema'
+import type { Plan, PlanDay, PlannedDay, PlannedPick, Exercise, SchemeId } from './schema'
 
 const now = () => new Date().toISOString()
 
@@ -43,7 +43,7 @@ export async function createPlan(userId: string, name: string): Promise<Plan> {
 
 export async function updatePlan(
   id: string,
-  patch: Partial<Pick<Plan, 'name' | 'days'>>,
+  patch: Partial<Pick<Plan, 'name' | 'days' | 'scheme'>>,
 ): Promise<void> {
   const db = await getDb()
   const doc = await db.plans.findOne(id).exec()
@@ -131,7 +131,14 @@ export async function resolveDay(
       ...(unavailable ? { unavailable: true } : {}),
     })
   }
-  return { planId: plan.id, dayId, label: day.label, picks, ...deriveMobility(day, picks, exMap) }
+  return {
+    planId: plan.id,
+    dayId,
+    label: day.label,
+    scheme: (plan.scheme as SchemeId) ?? 'double',
+    picks,
+    ...deriveMobility(day, picks, exMap),
+  }
 }
 
 // Derive warm-up/cooldown stretches from the catalog (category 'stretching') matching the day's

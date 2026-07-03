@@ -44,8 +44,16 @@ async function create(): Promise<WorkoutDatabase> {
       // v0→v1 added the nullable plannedDay; existing sessions default to null.
       migrationStrategies: { 1: (doc) => ({ ...doc, plannedDay: null }) },
     },
-    setlogs: { schema: setLogSchema },
-    plans: { schema: planSchema },
+    setlogs: {
+      schema: setLogSchema,
+      // v0→v1 added nullable rir + note (M5); existing sets default to null.
+      migrationStrategies: { 1: (doc) => ({ ...doc, rir: null, note: null }) },
+    },
+    plans: {
+      schema: planSchema,
+      // v0→v1 added the nullable scheme (M5); null = double progression default.
+      migrationStrategies: { 1: (doc) => ({ ...doc, scheme: null }) },
+    },
     exclusions: { schema: exclusionSchema },
   })
   return db
