@@ -10,6 +10,9 @@ import { type Unit, useUnit, unitToKg, kgToUnit, formatWeight } from '../lib/uni
 import { SetRow } from './SetRow'
 import { RirChips } from './RirChips'
 
+// Only plate-loaded bars get the plate calculator; cable/machine/dumbbell/bodyweight don't stack plates.
+const PLATE_LOADED = new Set(['barbell', 'e-z curl bar'])
+
 /** One planned exercise on Today: a collapsed counter expanding into an inline mini-logger; turns green once min sets are logged. */
 export function PlannedExerciseRow({
   pick,
@@ -19,6 +22,7 @@ export function PlannedExerciseRow({
   deload,
   nameOf,
   muscleOf,
+  equipmentOf,
 }: {
   pick: PlannedPick
   sessionId: string
@@ -27,6 +31,7 @@ export function PlannedExerciseRow({
   deload?: boolean
   nameOf: Map<string, string>
   muscleOf: Map<string, string>
+  equipmentOf: Map<string, string>
 }) {
   const unit = useUnit()
   const [open, setOpen] = useState(false)
@@ -96,6 +101,7 @@ export function PlannedExerciseRow({
           initialMin={min}
           nameOf={nameOf}
           muscleOf={muscleOf}
+          equipmentOf={equipmentOf}
         />
       )}
     </li>
@@ -115,6 +121,7 @@ function InlineLogger({
   initialMin,
   nameOf,
   muscleOf,
+  equipmentOf,
 }: {
   pick: PlannedPick
   sessionId: string
@@ -126,6 +133,7 @@ function InlineLogger({
   initialMin: number
   nameOf: Map<string, string>
   muscleOf: Map<string, string>
+  equipmentOf: Map<string, string>
 }) {
   const [minSets, setMinSets] = useState(initialMin ? String(initialMin) : '')
   const [weight, setWeight] = useState('')
@@ -169,6 +177,7 @@ function InlineLogger({
   const canLog = w > 0 && Number.isInteger(r) && r > 0
   const wKg = w > 0 ? unitToKg(w, unit) : 0
   const warmups = warmupSets(wKg)
+  const plateLoaded = PLATE_LOADED.has(equipmentOf.get(pick.exerciseId) ?? '')
   const plates = platesFor(wKg, barKg)
   const muscle = muscleOf.get(pick.exerciseId)
 
@@ -195,7 +204,7 @@ function InlineLogger({
       {/* Toolbar: swap exercise / plate math / rest this / save-to-plan (M4) */}
       <div className="mb-3 flex gap-2 text-xs font-bold uppercase tracking-wide">
         {pick.pool && pick.pool.length > 1 && <Tool active={panel === 'swap'} onClick={() => toggle('swap')}>Swap</Tool>}
-        <Tool active={panel === 'plates'} onClick={() => toggle('plates')}>Plates</Tool>
+        {plateLoaded && <Tool active={panel === 'plates'} onClick={() => toggle('plates')}>Plates</Tool>}
         <Tool active={panel === 'rest'} onClick={() => toggle('rest')}>Rest</Tool>
         {pick.added && (
           pick.savedToPlan ? (
@@ -252,7 +261,7 @@ function InlineLogger({
         </div>
       )}
 
-      {panel === 'plates' && (
+      {panel === 'plates' && plateLoaded && (
         <div className="mb-3 rounded-lg bg-steel-800 px-3 py-2 text-sm">
           <label className="flex items-center justify-between gap-3">
             <span className="text-xs font-semibold uppercase tracking-wide text-fog">Bar weight</span>

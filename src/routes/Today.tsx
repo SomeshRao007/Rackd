@@ -34,6 +34,8 @@ export function Today() {
     () => new Map(exercises.map((e) => [e.id, e.primaryMuscles[0] ?? ''])),
     [exercises],
   )
+  // equipment gates the plate calculator — only plate-loaded bars have a "per side" stack.
+  const equipmentOf = useMemo(() => new Map(exercises.map((e) => [e.id, e.equipment ?? ''])), [exercises])
 
   const planned = useMemo<PlannedDay | null>(() => {
     if (!session?.plannedDay) return null
@@ -87,6 +89,7 @@ export function Today() {
                 deload={planned.deload ?? false}
                 nameOf={nameOf}
                 muscleOf={muscleOf}
+                equipmentOf={equipmentOf}
               />
             ))}
           </ul>
