@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useDb, useRxData } from '../db/useRxData'
-import type { Exercise, MobilityStep, Plan, PlanDay, PlannedPick } from '../db/schema'
+import type { Exercise, MobilityStep, Plan, PlanDay, PlannedPick, SchemeId } from '../db/schema'
 import { resolveDay, lockDay } from '../db/plans'
+import { deloadStatus } from '../db/actions'
 import { fitToBudget, mobilityMinutes } from '../db/generate'
+import { SCHEMES, DELOAD_SET_FACTOR } from '../lib/suggest'
 import { usePrefs, setBudgetMin } from '../lib/prefs'
 import { MobilityBlock } from '../components/MobilityBlock'
 
@@ -21,6 +23,9 @@ export function StartDay() {
   const [basePicks, setBasePicks] = useState<PlannedPick[]>([])
   const [warmup, setWarmup] = useState<MobilityStep[]>([])
   const [cooldown, setCooldown] = useState<MobilityStep[]>([])
+  const [scheme, setScheme] = useState<SchemeId>('double')
+  const [deloadReason, setDeloadReason] = useState<string | null>(null)
+  const [deload, setDeload] = useState(false) // never auto-applied — the user opts in
   const [loading, setLoading] = useState(true)
 
   const exercises = useRxData<Exercise>((d) => d.exercises.find(), [])
@@ -47,6 +52,7 @@ export function StartDay() {
         setBasePicks(resolved.picks)
         setWarmup(resolved.warmup ?? [])
         setCooldown(resolved.cooldown ?? [])
+        setScheme(resolved.scheme ?? 'double')
         setLoading(false)
       })
     return () => {
@@ -54,12 +60,29 @@ export function StartDay() {
     }
   }, [db, planId, dayId, userId])
 
+  // Deload check (M5): surface a suggestion banner when a lighter week is due.
+  useEffect(() => {
+    if (!userId) return
+    let alive = true
+    deloadStatus(userId).then((reason) => {
+      if (alive) setDeloadReason(reason)
+    })
+    return () => {
+      alive = false
+    }
+  }, [userId])
+
   // Sets/reps fit the budget live (no budget → 2×10); load stays user-entered. Compounds favored.
+  // Deload on → half the sets here; the −15% load happens in the loggers via the flag.
+  // ponytail: preview reps come from fitToBudget's mechanic defaults; the scheme's reps win when the logger opens. Bake suggestions in at lock time if the mismatch confuses.
   const mobMin = useMemo(() => mobilityMinutes([...warmup, ...cooldown]), [warmup, cooldown])
-  const picks = useMemo(
-    () => fitToBudget(basePicks, exMap, prefs.budgetMin, mobMin, { restSec: prefs.restSec, workSec: prefs.workSec, maxSets: prefs.maxSets }),
-    [basePicks, exMap, prefs.budgetMin, mobMin, prefs.restSec, prefs.workSec, prefs.maxSets],
-  )
+  const picks = useMemo(() => {
+    const fitted = fitToBudget(basePicks, exMap, prefs.budgetMin, mobMin, { restSec: prefs.restSec, workSec: prefs.workSec, maxSets: prefs.maxSets })
+    if (!deload) return fitted
+    return fitted.map((p) =>
+      p.minSets != null ? { ...p, minSets: Math.max(1, Math.round(p.minSets * DELOAD_SET_FACTOR)) } : p,
+    )
+  }, [basePicks, exMap, prefs.budgetMin, mobMin, prefs.restSec, prefs.workSec, prefs.maxSets, deload])
 
   function swap(slotId: string, exerciseId: string) {
     setBasePicks((cur) =>
@@ -73,7 +96,16 @@ export function StartDay() {
 
   async function onLock() {
     if (!plan || !day) return
-    await lockDay(userId, { planId: plan.id, dayId: day.id, label: day.label, picks, warmup, cooldown })
+    await lockDay(userId, {
+      planId: plan.id,
+      dayId: day.id,
+      label: day.label,
+      picks,
+      warmup,
+      cooldown,
+      scheme,
+      ...(deload ? { deload: true } : {}),
+    })
     navigate('/app/today')
   }
 
@@ -102,6 +134,45 @@ export function StartDay() {
       <p className="mt-1 text-sm text-fog">
         Proposed by least-recently-trained, filtered to your kit. Tap to swap, set a time budget, then lock it in.
       </p>
+      <p className="mt-1 text-sm text-fog">
+        Progression: <span className="font-semibold text-chalk">{SCHEMES.find((s) => s.id === scheme)?.name}</span>{' '}
+        <Link to={`/app/plans/${plan.id}`} className="font-semibold text-amber hover:text-amber-bright">
+          Change
+        </Link>
+      </p>
+
+      {/* Deload suggestion (M5) — opt-in only; sets halve in the preview below, load drops in the loggers. */}
+      {deloadReason && (
+        <div className="mt-4 rounded-xl border border-amber/40 bg-amber/10 px-4 py-3">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm text-chalk">
+              <span className="font-bold text-amber">Deload suggested</span> — {deloadReason}. One lighter session: −15%
+              weight, half the sets.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setDeloadReason(null)
+                setDeload(false)
+              }}
+              aria-label="Dismiss deload suggestion"
+              className="shrink-0 text-fog transition-colors hover:text-chalk"
+            >
+              ✕
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDeload((d) => !d)}
+            aria-pressed={deload}
+            className={`mt-2 rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
+              deload ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'
+            }`}
+          >
+            {deload ? '✓ Deload on — tap to undo' : 'Take a deload'}
+          </button>
+        </div>
+      )}
 
       {/* Time budget — sets/reps auto-fit; blank = no limit (default 2×10). */}
       <label className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-steel-800 bg-steel-900 px-4 py-3">

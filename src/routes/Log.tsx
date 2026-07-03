@@ -3,13 +3,14 @@ import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import {
   getOrCreateTodaySession,
-  lastSetFor,
+  suggestFor,
   logSet,
   deleteSet,
 } from '../db/actions'
-import type { Exercise, SetLog } from '../db/schema'
+import type { Exercise, PlannedDay, SetLog } from '../db/schema'
 import { useUnit, unitToKg, kgToUnit } from '../lib/units'
 import { SetRow } from '../components/SetRow'
+import { RirChips } from '../components/RirChips'
 
 const MAX_RESULTS = 50
 
@@ -124,20 +125,31 @@ function Logger({
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState('')
+  const [reason, setReason] = useState('')
+  const [calibrate, setCalibrate] = useState(false)
+  const [rir, setRir] = useState<number | null>(null)
+  const [note, setNote] = useState('')
   const repsRef = useRef<HTMLInputElement>(null)
 
-  // Auto-fill once per exercise selection (component is keyed by id): seed inputs from the last logged set, never re-running so repeated sets keep what the user typed.
+  // Auto-fill once per exercise selection (component is keyed by id): seed inputs from the progression engine (M5), never re-running so repeated sets keep what the user typed. Scheme/deload come from today's locked day; no locked day → double, no deload.
   useEffect(() => {
     let alive = true
-    Promise.all([
-      getOrCreateTodaySession(userId),
-      lastSetFor(userId, exercise.id),
-    ]).then(([session, last]) => {
+    getOrCreateTodaySession(userId).then(async (session) => {
+      let planned: PlannedDay | null = null
+      try {
+        planned = session.plannedDay ? (JSON.parse(session.plannedDay) as PlannedDay) : null
+      } catch {
+        planned = null
+      }
+      const s = await suggestFor(userId, exercise.id, planned?.scheme ?? 'double', planned?.deload ?? false)
       if (!alive) return
       setSessionId(session.id)
-      if (last) {
-        setWeight(String(Math.round(kgToUnit(last.weightKg, unit) * 2) / 2))
-        setReps(String(last.reps))
+      if (s) {
+        setWeight(String(Math.round(kgToUnit(s.weightKg, unit) * 2) / 2))
+        setReps(String(s.targetReps))
+        setReason(s.reason)
+      } else {
+        setCalibrate(true)
       }
     })
     return () => {
@@ -187,8 +199,11 @@ function Logger({
       exerciseName: exercise.name,
       weightKg: unitToKg(w, unit),
       reps: r,
+      rir,
+      note: note || null,
     })
-    // Keep inputs populated for the next set; nudge focus back to reps.
+    // Keep inputs (and RIR) populated for the next set; clear the note; nudge focus back to reps.
+    setNote('')
     repsRef.current?.focus()
   }
 
@@ -219,6 +234,12 @@ function Logger({
         }}
         className="mt-6 rounded-2xl border border-steel-800 bg-steel-900 p-4"
       >
+        {reason && <p className="mb-3 text-xs font-semibold text-amber">↗ {reason}</p>}
+        {calibrate && (
+          <p className="mb-3 text-xs text-fog">
+            First time? Enter a weight you could lift about 8 times — your first set seeds the progression.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Field label={`Weight (${unit})`}>
             <input
@@ -246,6 +267,18 @@ function Logger({
             />
           </Field>
         </div>
+
+        <div className="mt-3">
+          <RirChips value={rir} onChange={setRir} />
+        </div>
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Note (optional)"
+          aria-label="Set note"
+          className="mt-3 w-full rounded-xl bg-steel-800 px-3 py-2 text-sm text-chalk outline-none placeholder:text-steel-600"
+        />
 
         <button
           type="submit"

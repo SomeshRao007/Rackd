@@ -18,11 +18,15 @@ export function SetRow({
       <span className="grid size-7 shrink-0 place-items-center rounded-md bg-steel-700 text-sm font-bold text-fog">
         {index + 1}
       </span>
-      <span className="nums flex-1 text-lg font-semibold">
-        {formatWeight(set.weightKg, unit)}
-        <span className="px-2 text-fog">×</span>
-        {set.reps}
-        <span className="pl-1 text-sm font-normal text-fog"> reps</span>
+      <span className="min-w-0 flex-1">
+        <span className="nums block text-lg font-semibold">
+          {formatWeight(set.weightKg, unit)}
+          <span className="px-2 text-fog">×</span>
+          {set.reps}
+          <span className="pl-1 text-sm font-normal text-fog"> reps</span>
+          {set.rir != null && <span className="pl-2 text-xs font-normal text-fog">@ RIR {set.rir}</span>}
+        </span>
+        {set.note && <span className="block truncate text-xs text-fog">{set.note}</span>}
       </span>
       {onDelete && (
         <button

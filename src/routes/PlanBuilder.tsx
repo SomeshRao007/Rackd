@@ -19,8 +19,9 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../auth/AuthContext'
 import { useDb, useRxData } from '../db/useRxData'
-import type { Exercise, Plan, PlanDay, PlanSlot } from '../db/schema'
+import type { Exercise, Plan, PlanDay, PlanSlot, SchemeId } from '../db/schema'
 import { updatePlan, deletePlan, publishPlan } from '../db/plans'
+import { SCHEMES } from '../lib/suggest'
 import { ExercisePicker } from '../components/ExercisePicker'
 
 const uid = () => crypto.randomUUID()
@@ -32,6 +33,7 @@ export function PlanBuilder() {
   const db = useDb()
 
   const [name, setName] = useState('')
+  const [scheme, setScheme] = useState<SchemeId>('double')
   const [days, setDays] = useState<PlanDay[]>([])
   const [loaded, setLoaded] = useState(false)
   const [pickerSlot, setPickerSlot] = useState<string | null>(null)
@@ -52,6 +54,7 @@ export function PlanBuilder() {
       }
       const p = doc.toJSON() as Plan
       setName(p.name)
+      setScheme((p.scheme as SchemeId | null) ?? 'double')
       try {
         setDays(JSON.parse(p.days) as PlanDay[])
       } catch {
@@ -193,6 +196,33 @@ export function PlanBuilder() {
         </p>
       )}
       {shareNote && <p className="mt-2 text-sm text-red-400">{shareNote}</p>}
+
+      {/* Progression scheme (M5): how every lift in this plan advances session to session. */}
+      <div className="mt-6 rounded-2xl border border-steel-800 bg-steel-900/60 p-4">
+        <h2 className="font-display text-xl font-bold">Progression</h2>
+        <div className="mt-3 space-y-2.5">
+          {SCHEMES.map((s) => {
+            const active = scheme === s.id
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  setScheme(s.id)
+                  if (planId) void updatePlan(planId, { scheme: s.id })
+                }}
+                aria-pressed={active}
+                className={`w-full rounded-xl border bg-steel-900 p-3 text-left transition-colors ${
+                  active ? 'border-amber ring-1 ring-amber' : 'border-steel-800 hover:border-steel-700'
+                }`}
+              >
+                <span className={`block font-bold ${active ? 'text-amber' : 'text-chalk'}`}>{s.name}</span>
+                <span className="mt-1 block text-sm text-fog">{s.blurb}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <div className="mt-6 space-y-5">

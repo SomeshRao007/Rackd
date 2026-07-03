@@ -1,25 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRxData } from '../db/useRxData'
-import type { SetLog, PlannedPick } from '../db/schema'
-import { logSet, lastSetFor, deleteSet } from '../db/actions'
+import type { SetLog, PlannedPick, SchemeId } from '../db/schema'
+import { logSet, suggestFor, deleteSet } from '../db/actions'
 import { setPickMinSets, setPickExercise, saveAddedPickToPlan } from '../db/plans'
 import { addExclusion } from '../db/exclusions'
 import { warmupSets, platesFor } from '../lib/lifting'
 import { usePrefs, setBarKg } from '../lib/prefs'
 import { type Unit, useUnit, unitToKg, kgToUnit, formatWeight } from '../lib/units'
 import { SetRow } from './SetRow'
+import { RirChips } from './RirChips'
 
 /** One planned exercise on Today: a collapsed counter expanding into an inline mini-logger; turns green once min sets are logged. */
 export function PlannedExerciseRow({
   pick,
   sessionId,
   userId,
+  scheme,
+  deload,
   nameOf,
   muscleOf,
 }: {
   pick: PlannedPick
   sessionId: string
   userId: string
+  scheme: SchemeId
+  deload?: boolean
   nameOf: Map<string, string>
   muscleOf: Map<string, string>
 }) {
@@ -84,6 +89,8 @@ export function PlannedExerciseRow({
           pick={pick}
           sessionId={sessionId}
           userId={userId}
+          scheme={scheme}
+          deload={deload}
           unit={unit}
           sets={sets}
           initialMin={min}
@@ -101,6 +108,8 @@ function InlineLogger({
   pick,
   sessionId,
   userId,
+  scheme,
+  deload,
   unit,
   sets,
   initialMin,
@@ -110,6 +119,8 @@ function InlineLogger({
   pick: PlannedPick
   sessionId: string
   userId: string
+  scheme: SchemeId
+  deload?: boolean
   unit: Unit
   sets: SetLog[]
   initialMin: number
@@ -119,18 +130,27 @@ function InlineLogger({
   const [minSets, setMinSets] = useState(initialMin ? String(initialMin) : '')
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState(pick.targetReps ? String(pick.targetReps) : '')
+  const [reason, setReason] = useState('')
+  const [calibrate, setCalibrate] = useState(false)
+  const [rir, setRir] = useState<number | null>(null)
+  const [note, setNote] = useState('')
   const [panel, setPanel] = useState<Panel>('none')
   const [restedMsg, setRestedMsg] = useState('')
   const { barKg } = usePrefs()
   const repsRef = useRef<HTMLInputElement>(null)
 
-  // Autofill from the last logged set (async .then → not a sync setState-in-effect).
+  // Seed once from the progression engine (M5); async .then → not a sync setState-in-effect.
   useEffect(() => {
     let alive = true
-    lastSetFor(userId, pick.exerciseId).then((last) => {
-      if (!alive || !last) return
-      setWeight(String(Math.round(kgToUnit(last.weightKg, unit) * 2) / 2))
-      setReps(String(last.reps))
+    suggestFor(userId, pick.exerciseId, scheme, deload).then((s) => {
+      if (!alive) return
+      if (!s) {
+        setCalibrate(true)
+        return
+      }
+      setWeight(String(Math.round(kgToUnit(s.weightKg, unit) * 2) / 2))
+      setReps(String(s.targetReps))
+      setReason(s.reason)
     })
     return () => {
       alive = false
@@ -161,7 +181,10 @@ function InlineLogger({
       exerciseName: pick.exerciseName,
       weightKg: wKg,
       reps: r,
+      rir,
+      note: note || null,
     })
+    setNote('') // RIR intentionally kept — stable set to set
     repsRef.current?.focus()
   }
 
@@ -286,35 +309,53 @@ function InlineLogger({
         </div>
       )}
 
+      {reason && <p className="mt-3 text-xs font-semibold text-amber">↗ {reason}</p>}
+      {calibrate && (
+        <p className="mt-3 text-xs text-fog">
+          First time? Enter a weight you could lift about 8 times — your first set seeds the progression.
+        </p>
+      )}
+
       <form
         onSubmit={(e) => {
           e.preventDefault()
           onLog()
         }}
-        className="mt-3 grid grid-cols-[1fr_1fr_auto] items-stretch gap-2"
+        className="mt-3 space-y-2"
       >
-        <Field label={`Weight (${unit})`}>
-          <input
-            type="number" inputMode="decimal" step="0.5" min="0"
-            value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="0"
-            className="nums w-full bg-transparent text-center text-2xl font-black text-chalk outline-none placeholder:text-steel-700"
-          />
-        </Field>
-        <Field label="Reps">
-          <input
-            ref={repsRef}
-            type="number" inputMode="numeric" step="1" min="1"
-            value={reps} onChange={(e) => setReps(e.target.value)} placeholder="0"
-            className="nums w-full bg-transparent text-center text-2xl font-black text-chalk outline-none placeholder:text-steel-700"
-          />
-        </Field>
-        <button
-          type="submit"
-          disabled={!canLog}
-          className="rounded-xl bg-amber px-4 font-display font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright disabled:cursor-not-allowed disabled:bg-steel-700 disabled:text-fog"
-        >
-          Log
-        </button>
+        <div className="grid grid-cols-[1fr_1fr_auto] items-stretch gap-2">
+          <Field label={`Weight (${unit})`}>
+            <input
+              type="number" inputMode="decimal" step="0.5" min="0"
+              value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="0"
+              className="nums w-full bg-transparent text-center text-2xl font-black text-chalk outline-none placeholder:text-steel-700"
+            />
+          </Field>
+          <Field label="Reps">
+            <input
+              ref={repsRef}
+              type="number" inputMode="numeric" step="1" min="1"
+              value={reps} onChange={(e) => setReps(e.target.value)} placeholder="0"
+              className="nums w-full bg-transparent text-center text-2xl font-black text-chalk outline-none placeholder:text-steel-700"
+            />
+          </Field>
+          <button
+            type="submit"
+            disabled={!canLog}
+            className="rounded-xl bg-amber px-4 font-display font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright disabled:cursor-not-allowed disabled:bg-steel-700 disabled:text-fog"
+          >
+            Log
+          </button>
+        </div>
+        <RirChips value={rir} onChange={setRir} />
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Note (optional)"
+          aria-label="Set note"
+          className="w-full rounded-xl bg-steel-800 px-3 py-2 text-sm text-chalk outline-none placeholder:text-steel-600"
+        />
       </form>
 
       {sets.length > 0 && (

@@ -83,6 +83,8 @@ export function Today() {
                 pick={pick}
                 sessionId={sessionId}
                 userId={userId}
+                scheme={planned.scheme ?? 'double'}
+                deload={planned.deload ?? false}
                 nameOf={nameOf}
                 muscleOf={muscleOf}
               />
