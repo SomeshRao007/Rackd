@@ -57,8 +57,8 @@ export function StartDay() {
   // Sets/reps fit the budget live (no budget → 2×10); load stays user-entered. Compounds favored.
   const mobMin = useMemo(() => mobilityMinutes([...warmup, ...cooldown]), [warmup, cooldown])
   const picks = useMemo(
-    () => fitToBudget(basePicks, exMap, prefs.budgetMin, mobMin, { restSec: prefs.restSec, workSec: prefs.workSec }),
-    [basePicks, exMap, prefs.budgetMin, mobMin, prefs.restSec, prefs.workSec],
+    () => fitToBudget(basePicks, exMap, prefs.budgetMin, mobMin, { restSec: prefs.restSec, workSec: prefs.workSec, maxSets: prefs.maxSets }),
+    [basePicks, exMap, prefs.budgetMin, mobMin, prefs.restSec, prefs.workSec, prefs.maxSets],
   )
 
   function swap(slotId: string, exerciseId: string) {

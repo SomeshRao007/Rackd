@@ -120,6 +120,7 @@ function InlineLogger({
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState(pick.targetReps ? String(pick.targetReps) : '')
   const [panel, setPanel] = useState<Panel>('none')
+  const [restedMsg, setRestedMsg] = useState('')
   const { barKg } = usePrefs()
   const repsRef = useRef<HTMLInputElement>(null)
 
@@ -208,14 +209,22 @@ function InlineLogger({
       )}
 
       {panel === 'rest' && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          <RestButton onClick={() => { void addExclusion(userId, 'exercise', pick.exerciseId, pick.exerciseName, 7); setPanel('none') }}>
-            Rest this lift · 1 week
-          </RestButton>
-          {muscle && (
-            <RestButton onClick={() => { void addExclusion(userId, 'muscle', muscle, muscle, 7); setPanel('none') }}>
-              Rest {muscle} · 1 week
-            </RestButton>
+        <div className="mb-3">
+          {restedMsg ? (
+            <p className="rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-2 text-sm text-green-300">
+              ✓ {restedMsg}. This won’t change today’s session — it’s left out of your next generated day. End it anytime in Settings.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <RestButton onClick={() => { void addExclusion(userId, 'exercise', pick.exerciseId, pick.exerciseName, 7); setRestedMsg(`Resting ${pick.exerciseName} for 1 week`) }}>
+                Rest this lift · 1 week
+              </RestButton>
+              {muscle && (
+                <RestButton onClick={() => { void addExclusion(userId, 'muscle', muscle, muscle, 7); setRestedMsg(`Resting ${muscle} for 1 week`) }}>
+                  Rest {muscle} · 1 week
+                </RestButton>
+              )}
+            </div>
           )}
         </div>
       )}

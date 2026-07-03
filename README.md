@@ -114,8 +114,9 @@ npm run test    # sync replication, rotation, session generation, lifting math
 1. Sign in (email/password or Google).
 2. **Settings** (M4) — Configure your device: environment (home/gym), available equipment, and workout timing.
    Environment and equipment filters which exercises appear when plans are resolved. Workout timing
-   (rest interval between sets and rough working-set duration) calibrates how many sets fit the Start-day
-   time budget. Also manage temporary or permanent exclusions (rest a muscle group or specific exercise
+   (rest interval between sets, rough working-set duration, and a maximum sets-per-exercise ceiling) calibrates how many
+   sets fit the Start-day time budget. The max-sets input (default 6) is adjustable to limit how many sets the budget
+   algorithm assigns to any single exercise. Also manage temporary or permanent exclusions (rest a muscle group or specific exercise
    for a preset duration or forever) — useful for injury recovery or focusing on other body parts.
 3. **Plans** (M3) — Build your own workout plan or adopt a starter plan. A plan defines "days"
    (e.g., Push, Pull, Legs), each with "slots" (e.g., Horizontal Push). Each slot holds an exercise pool.
@@ -134,7 +135,9 @@ npm run test    # sync replication, rotation, session generation, lifting math
    (barbell plate stack per side; edit the bar weight in the calculator if your bar is not 20 kg). Tap a row to expand it, log weight × reps per set.
    Mid-workout actions: swap to a different exercise (drawing from your plan's pool),
    add a new exercise from the catalog (an "+ Add exercise" button at the bottom), or temporarily exclude an exercise
-   or muscle group to rest. Ad-hoc exercises added mid-session can be saved to the plan so they recur next time.
+   or muscle group to rest. When you exclude an exercise ("Rest this lift" or "Rest {muscle}"), an inline confirmation appears
+   explaining the exclusion takes effect on the next generated day (not the current session) and can be ended anytime in Settings.
+   Ad-hoc exercises added mid-session can be saved to the plan so they recur next time.
    Rows turn green once you've logged the target number of sets. Any lifts logged outside the plan appear under "Also logged".
    Stats show today's total set count, lift count, and volume.
 6. **Log** — Search the exercise catalog and log weight + reps per set (logging is now inline on Today

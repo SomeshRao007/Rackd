@@ -58,4 +58,11 @@ const timing = { restSec: 120, workSec: 40 } // 160s per set
   assert.ok(sum(fast) > sum(slow), 'faster per-set timing fits more sets in the same budget')
 }
 
-console.log('generate-test: OK — role-based reps, budget fits sets, compounds favored, calibration applies, no weight')
+// user-tunable set ceiling caps how high sets climb, even with a huge budget
+{
+  const out = fitToBudget(picks, exMap, 999, 0, { ...timing, maxSets: 3 })
+  assert.ok(out.every((p) => (p.minSets as number) <= 3), 'no exercise exceeds the maxSets ceiling')
+  assert.ok(out.some((p) => p.minSets === 3), 'a generous budget reaches the ceiling')
+}
+
+console.log('generate-test: OK — role reps, calibration + maxSets applied, compounds favored, no weight')

@@ -5,7 +5,7 @@ import { useRxData } from '../db/useRxData'
 import type { Exclusion } from '../db/schema'
 import { addExclusion, removeExclusion } from '../db/exclusions'
 import {
-  usePrefs, setEnvironment, setEquipment, setRestSec, setWorkSec,
+  usePrefs, setEnvironment, setEquipment, setRestSec, setWorkSec, setMaxSets,
   ALL_EQUIPMENT, type Environment,
 } from '../lib/prefs'
 
@@ -95,12 +95,13 @@ export function Settings() {
       {/* Workout timing — calibrates the Start-day time budget */}
       <h2 className="mt-7 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Workout timing</h2>
       <div className="space-y-2">
-        <TimingInput label="Rest between sets" value={prefs.restSec} onChange={setRestSec} />
-        <TimingInput label="Working set time" value={prefs.workSec} onChange={setWorkSec} />
+        <NumberPref label="Rest between sets" value={prefs.restSec} onChange={setRestSec} suffix="sec" />
+        <NumberPref label="Working set time" value={prefs.workSec} onChange={setWorkSec} suffix="sec" />
+        <NumberPref label="Max sets per exercise" value={prefs.maxSets} onChange={setMaxSets} suffix="sets" step="1" min="1" />
       </div>
       <p className="mt-1.5 text-xs text-fog">
         Your real per-set timing. The Start-day time budget uses rest + set time to decide how many
-        sets fit. Reps are set by exercise type (heavy lifts lower, isolation higher).
+        sets fit, up to the max above. Reps are set by exercise type (heavy lifts lower, isolation higher).
       </p>
 
       {/* Exclusions */}
@@ -135,7 +136,9 @@ export function Settings() {
   )
 }
 
-function TimingInput({ label, value, onChange }: { label: string; value: number; onChange: (sec: number) => void }) {
+function NumberPref({
+  label, value, onChange, suffix, step = '5', min = '0',
+}: { label: string; value: number; onChange: (n: number) => void; suffix: string; step?: string; min?: string }) {
   return (
     <label className="flex items-center justify-between gap-3 rounded-xl border border-steel-800 bg-steel-900 px-4 py-3">
       <span className="text-sm font-semibold uppercase tracking-wide text-fog">{label}</span>
@@ -143,14 +146,14 @@ function TimingInput({ label, value, onChange }: { label: string; value: number;
         <input
           type="number"
           inputMode="numeric"
-          min="0"
-          step="5"
+          min={min}
+          step={step}
           value={value}
           onChange={(e) => onChange(Number(e.target.value) || 0)}
-          aria-label={`${label} in seconds`}
+          aria-label={`${label} in ${suffix}`}
           className="nums w-16 bg-transparent text-right text-2xl font-black text-chalk outline-none"
         />
-        <span className="text-sm font-semibold text-fog">sec</span>
+        <span className="text-sm font-semibold text-fog">{suffix}</span>
       </span>
     </label>
   )
