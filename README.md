@@ -31,8 +31,15 @@ session. That part isn't built yet (see [Roadmap](#roadmap)).
   Automatic 1RM estimation via Epley formula, break re-entry (2+ idle weeks → regressed load),
   and deload suggestions (−15% load, half the sets) when fatigue accumulates. RIR is optional and can be
   manually logged (0–5 scale chips per set). Per-set notes also tracked.
+- **M6: Goals & adaptive tracking** — New Progress tab (bottom nav) with three sections. *Muscles*: volume-by-muscle-group
+  dashboard showing sets and tonnage over 7/14/30/365-day rolling windows; each group is expandable to see the 17 individual
+  muscles, and a stylized body-map heatmap overlays trained areas. *Goals*: create weight-loss, strength, or hypertrophy goals;
+  track progress with a bar; get adaptive suggestions ("add" with a concrete least-recently-trained pick, "keep" or "reduce");
+  memory prompt reuses the last goal's result when creating a new one (R7). *Body*: log current weight and optional measurements
+  (waist, chest, arms, thighs, hips); hand-rolled SVG weight-trend sparkline shows progress over time. All synced via new RxDB
+  collections (goals, bodymetrics) and D1.
 
-**Not built yet:** goals, recovery tracking, recommendations.
+**Not built yet:** recovery tracking, recommendations, progress photos (deferred to R2).
 See [Roadmap](#roadmap).
 
 Not deployed anywhere yet — runs locally for now.
@@ -58,7 +65,9 @@ Browser (PWA, React + Vite)
   ├─ RxDB + Dexie (IndexedDB)   — local-first store, works offline
   │   ├─ sessions + setlogs    — append-only log of lifts (M5: +rir, +note)
   │   ├─ plans                 — user's own workout plans (M3, M5: +scheme)
-  │   └─ exclusions            — temporary/permanent movement exclusions (M4)
+  │   ├─ exclusions            — temporary/permanent movement exclusions (M4)
+  │   ├─ goals                 — weight-loss/strength/hypertrophy goals (M6)
+  │   └─ bodymetrics           — weight + measurements log (M6)
   ├─ localStorage              — device-local environment + equipment prefs (M4)
   ├─ static exercise catalog   — seeded once, versioned JSON
   ├─ starter plans             — seeded at build time, versioned JSON (M3)
@@ -72,7 +81,7 @@ Cloudflare Pages Functions
   └─ /share/[code]    — fetch a shared plan snapshot (M3)
         ▼
 D1 (SQLite) — per-user rows: sessions (with nullable plannedDay), setlogs (M5: +rir, +note),
-              plans (M3, M5: +scheme), exclusions (M4)
+              plans (M3, M5: +scheme), exclusions (M4), goals (M6), bodymetrics (M6)
             — cross-user immutable rows: shared_plans (M3)
             ↕ pull restores the same data on a new device
 ```
@@ -95,7 +104,7 @@ npm run dev            # → http://localhost:5173
 
 ```bash
 cp .dev.vars.example .dev.vars        # set JWT_SECRET; Google keys optional, see below
-npx wrangler d1 migrations apply workout-db --local   # creates local D1 tables (M1-M5 migrations)
+npx wrangler d1 migrations apply workout-db --local   # creates local D1 tables (M1-M6 migrations)
 npm run seed:plans                     # generates starter plans into public/catalog/
 npm run dev:api   # terminal 1 — Pages Functions + local D1 on http://localhost:8788
 npm run dev       # terminal 2 — app on http://localhost:5173 (proxies /auth + /sync + /share to :8788)
@@ -112,7 +121,7 @@ Never set it in production.
 **Tests:**
 ```bash
 npm run smoke   # RxDB schema sanity check
-npm run test    # sync replication, rotation, session generation, progression (M5), lifting math
+npm run test    # sync replication, rotation, session generation, progression (M5), volume aggregation (M6), goals (M6), lifting math
 ```
 
 ## Using the app
@@ -138,7 +147,14 @@ npm run test    # sync replication, rotation, session generation, progression (M
    at role-based reps. The active progression scheme is shown; if a deload is suggested (based on accumulated
    fatigue), a banner offers to apply it (−15% load, half the sets). Mobility blocks appear for warm-up
    (stretches targeting the day's trained muscles) and cool-down, each with a seconds countdown.
-5. **Today** — When a plan day is locked, each planned exercise appears as an inline mini-logger.
+5. **Progress** (M6) — Bottom-nav tab with three sections. *Muscles*: see training volume (sets + tonnage) per muscle group
+   over rolling 7/14/30/365-day windows; expand each group to drill into the 17 individual muscles; an overlay body-map
+   heatmap shows which areas you've trained. *Goals*: create a goal (lose fat, gain strength on a specific lift, or build muscle),
+   watch your progress with a bar, and get adaptive suggestions (add a least-recently-trained exercise, keep the current plan,
+   or reduce volume). When you finish a goal and start a new one, the app asks if you want to reuse the last cycle's result.
+   *Body*: log your current weight and any measurements (waist, chest, arms, thighs, hips); a hand-rolled weight-trend sparkline
+   visualizes your progress over time.
+6. **Today** — When a plan day is locked, each planned exercise appears as an inline mini-logger.
    For each exercise: see suggested weight + reps (from the plan's progression scheme), warm-up sets
    (steps down from the last working weight), and a plate calculator (barbell plate stack per side;
    edit the bar weight in the calculator if your bar is not 20 kg). Tap a row to expand it, log weight × reps per set.
@@ -150,10 +166,10 @@ npm run test    # sync replication, rotation, session generation, progression (M
    Ad-hoc exercises added mid-session can be saved to the plan so they recur next time.
    Rows turn green once you've logged the target number of sets. Any lifts logged outside the plan appear under "Also logged".
    Stats show today's total set count, lift count, and volume.
-6. **Log** — Search the exercise catalog and log weight + reps per set (logging is now inline on Today
+7. **Log** — Search the exercise catalog and log weight + reps per set (logging is now inline on Today
    when following a plan). Last session's numbers for that exercise are pre-filled.
-7. **History** — Past sessions.
-8. Toggle kg/lb anytime from the header. Export all your data as JSON from the same header.
+8. **History** — Past sessions.
+9. Toggle kg/lb anytime from the header. Export all your data as JSON from the same header.
 
 Data lives on your device first. If you're signed in and online, it syncs to your other
 devices automatically.
@@ -167,7 +183,7 @@ In rough order, each one shippable on its own:
 | ✓ Plans & templates (M3) | Build a workout plan once, reuse it. Exercises rotate automatically within each slot's pool. Share plans with other users (immutable snapshots). |
 | ✓ Rules-based generation (M4) | Time-budget auto-assignment, equipment/environment awareness, injury exclusions, mobility blocks, warm-up sets, plate math, mid-workout swaps. |
 | ✓ Progression & intensity (M5) | Per-plan progression schemes (double & linear), automatic weight + reps suggestion, RIR logging, 1RM estimation, break re-entry, deload detection. |
-| Goals & body tracking | Track weight, measurements, progress photos. See training volume per muscle group over time. |
+| ✓ Goals & body tracking (M6) | Weight-loss, strength, and hypertrophy goals with progress bars and adaptive suggestions. Body weight + measurements tracking with trend sparkline. Volume-by-muscle-group dashboard over 7/14/30/365-day windows with drill-down and body-map overlay. |
 | Recovery & consistency | Recovery-readiness score, streaks, nudges when you're falling off pace. |
 | Exercise intelligence | Visual muscle map per exercise; smart classification for custom exercises you add. |
 | Optional AI layer | Bring your own AI key to improve plans/recommendations. Never required — the app works fully without it. |

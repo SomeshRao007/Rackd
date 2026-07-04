@@ -15,6 +15,8 @@ import {
   setLogSchema,
   planSchema,
   exclusionSchema,
+  goalSchema,
+  bodyMetricSchema,
   type WorkoutDatabase,
 } from '../src/db/schema'
 
@@ -40,6 +42,8 @@ await db.addCollections({
     migrationStrategies: { 1: (doc) => ({ ...doc, scheme: null }) },
   },
   exclusions: { schema: exclusionSchema },
+  goals: { schema: goalSchema },
+  bodymetrics: { schema: bodyMetricSchema },
 })
 
 const base = {
@@ -102,5 +106,24 @@ assert.equal(p2?.scheme ?? null, null, 'plan scheme null round-trips')
 await p2!.patch({ scheme: 'linear', updatedAt: '2026-06-22T00:00:01.000Z' })
 assert.equal((await db.plans.findOne('p2').exec())?.scheme, 'linear', 'plan scheme patch round-trips')
 
-console.log('✓ schema smoke passed (index sort, order-count, idempotent session, plans + session v1, setlog rir/note + plan scheme v1)')
+// M6: goal carries nested emphasis/outcome as JSON strings; body-metric carries a measurements JSON map.
+await db.goals.insert({
+  id: 'g1', userId: 'u1', type: 'hypertrophy', title: 'Grow back', emphasis: JSON.stringify(['back']),
+  targetMetric: 'volume', targetExerciseId: null, targetValue: 12, baselineValue: null, deadline: '2026-09-01',
+  status: 'active', outcome: null, createdAt: '2026-06-22T00:00:00.000Z', updatedAt: '2026-06-22T00:00:00.000Z', deletedAt: null,
+})
+const g1 = await db.goals.findOne('g1').exec()
+assert.equal(JSON.parse(g1!.emphasis!)[0], 'back', 'goal emphasis JSON round-trips')
+await g1!.patch({ status: 'completed', outcome: JSON.stringify({ finalValue: 14, hitTarget: true, pct: 117 }), updatedAt: '2026-06-22T00:00:01.000Z' })
+assert.equal(JSON.parse((await db.goals.findOne('g1').exec())!.outcome!).hitTarget, true, 'goal outcome patch round-trips')
+
+await db.bodymetrics.insert({
+  id: 'bm1', userId: 'u1', date: '2026-06-22', weightKg: 80, measurements: JSON.stringify({ waist: 84 }), note: null,
+  createdAt: '2026-06-22T00:00:00.000Z', updatedAt: '2026-06-22T00:00:00.000Z', deletedAt: null,
+})
+const bm1 = await db.bodymetrics.findOne('bm1').exec()
+assert.equal(bm1?.weightKg, 80, 'body-metric weight round-trips')
+assert.equal(JSON.parse(bm1!.measurements!).waist, 84, 'body-metric measurements JSON round-trips')
+
+console.log('✓ schema smoke passed (index sort, order-count, idempotent session, plans + session v1, setlog rir/note + plan scheme v1, goals + bodymetrics v0)')
 await db.close()

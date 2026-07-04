@@ -9,6 +9,7 @@ import { History } from './routes/History'
 import { Plans } from './routes/Plans'
 import { PlanBuilder } from './routes/PlanBuilder'
 import { StartDay } from './routes/StartDay'
+import { Progress } from './routes/Progress'
 import { Settings } from './routes/Settings'
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
               <Route path="plans" element={<Plans />} />
               <Route path="plans/:id" element={<PlanBuilder />} />
               <Route path="plans/:id/start/:dayId" element={<StartDay />} />
+              <Route path="progress" element={<Progress />} />
               <Route path="history" element={<History />} />
               <Route path="settings" element={<Settings />} />
             </Route>
