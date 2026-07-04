@@ -8,12 +8,7 @@ import {
   usePrefs, setEnvironment, setEquipment, setRestSec, setWorkSec, setMaxSets,
   ALL_EQUIPMENT, type Environment,
 } from '../lib/prefs'
-
-// The 17 catalog primaryMuscles (source: scripts/seed-catalog.ts output).
-const MUSCLES = [
-  'quadriceps', 'shoulders', 'abdominals', 'chest', 'hamstrings', 'triceps', 'biceps', 'lats',
-  'middle back', 'calves', 'lower back', 'forearms', 'glutes', 'traps', 'adductors', 'neck', 'abductors',
-]
+import { MUSCLES } from '../lib/muscles'
 
 // Duration presets for an exclusion; null = forever.
 const DURATIONS: { label: string; days: number | null }[] = [

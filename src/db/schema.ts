@@ -148,6 +148,64 @@ const exclusionTyped = toTypedRxJsonSchema(exclusionSchemaLiteral)
 export type Exclusion = ExtractDocumentTypeFromTypedRxJsonSchema<typeof exclusionTyped>
 export const exclusionSchema: RxJsonSchema<Exclusion> = exclusionSchemaLiteral
 
+// ── Goal (per-user, synced; M6 R6/R7) ────────────────────────────────────────
+// Longitudinal: the active goal AND the outcome memory of past ones (R7). `type` picks the metric —
+// hypertrophy→weekly sets ('volume'), strength→e1RM of targetExerciseId ('e1rm'), fatloss→bodyweight.
+// emphasis = JSON array of MuscleGroupId; outcome = JSON {finalValue,hitTarget,pct} stamped at close.
+const goalSchemaLiteral = {
+  title: 'goal',
+  version: 0,
+  primaryKey: 'id',
+  type: 'object',
+  properties: {
+    id: { type: 'string', maxLength: 100 },
+    userId: { type: 'string', maxLength: 100 },
+    type: { type: 'string' },
+    title: { type: 'string' },
+    emphasis: { type: ['string', 'null'] },
+    targetMetric: { type: 'string' },
+    targetExerciseId: { type: ['string', 'null'] },
+    targetValue: { type: 'number' },
+    baselineValue: { type: ['number', 'null'] },
+    deadline: { type: ['string', 'null'] },
+    status: { type: 'string' },
+    outcome: { type: ['string', 'null'] },
+    createdAt: { type: 'string' },
+    updatedAt: { type: 'string' },
+    deletedAt: { type: ['string', 'null'] },
+  },
+  required: ['id', 'userId', 'type', 'targetMetric', 'targetValue', 'status', 'createdAt', 'updatedAt'],
+} as const
+const goalTyped = toTypedRxJsonSchema(goalSchemaLiteral)
+export type Goal = ExtractDocumentTypeFromTypedRxJsonSchema<typeof goalTyped>
+export const goalSchema: RxJsonSchema<Goal> = goalSchemaLiteral
+
+// ── BodyMetric (per-user, synced; M6 Part G) ─────────────────────────────────
+// One row per measurement date. weightKg canonical (kg); measurements = JSON map {waist,chest,…} in cm.
+// Progress photos are deferred (need R2) — see .claude/notes/m6-deferred.md.
+const bodyMetricSchemaLiteral = {
+  title: 'bodymetric',
+  version: 0,
+  primaryKey: 'id',
+  type: 'object',
+  properties: {
+    id: { type: 'string', maxLength: 100 },
+    userId: { type: 'string', maxLength: 100 },
+    date: { type: 'string', maxLength: 10 },
+    weightKg: { type: ['number', 'null'] },
+    measurements: { type: ['string', 'null'] },
+    note: { type: ['string', 'null'] },
+    createdAt: { type: 'string' },
+    updatedAt: { type: 'string' },
+    deletedAt: { type: ['string', 'null'] },
+  },
+  required: ['id', 'userId', 'date', 'createdAt', 'updatedAt'],
+  indexes: ['date'],
+} as const
+const bodyMetricTyped = toTypedRxJsonSchema(bodyMetricSchemaLiteral)
+export type BodyMetric = ExtractDocumentTypeFromTypedRxJsonSchema<typeof bodyMetricTyped>
+export const bodyMetricSchema: RxJsonSchema<BodyMetric> = bodyMetricSchemaLiteral
+
 // Parsed `days` shapes — the in-memory contract for the builder + rotation.
 export type PlanSlot = { id: string; label: string; exercisePool: string[] }
 export type PlanDay = { id: string; label: string; slots: PlanSlot[] }
@@ -185,5 +243,7 @@ export type WorkoutCollections = {
   setlogs: RxCollection<SetLog>
   plans: RxCollection<Plan>
   exclusions: RxCollection<Exclusion>
+  goals: RxCollection<Goal>
+  bodymetrics: RxCollection<BodyMetric>
 }
 export type WorkoutDatabase = RxDatabase<WorkoutCollections>
