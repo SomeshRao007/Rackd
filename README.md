@@ -38,9 +38,16 @@ session. That part isn't built yet (see [Roadmap](#roadmap)).
   memory prompt reuses the last goal's result when creating a new one (R7). *Body*: log current weight and optional measurements
   (waist, chest, arms, thighs, hips); hand-rolled SVG weight-trend sparkline shows progress over time. All synced via new RxDB
   collections (goals, bodymetrics) and D1.
+- **M7: Recovery, consistency & motivation** — Daily 3-tap recovery-readiness check-in (sleep / soreness / energy) on Start Day,
+  stored in synced `readiness` collection; a derived 0–100 score eases suggested load on run-down days (a readinessFactor in the
+  progression engine). Weekly training-streak tracking with detraining nudge when falling off pace. Today screen shows a streak chip,
+  daily motivational quote, and per-session muscle micro-lesson. Personal record detection and celebration: top weight and estimated
+  1RM PRs from the progression engine. New Recovery tab under Progress showing readiness trend sparkline, streak tiles, detraining
+  warning, and gamification badges (streak/PR/goal state derived from synced data, no new stored state). Native Web Push scaffold:
+  client subscribe helper, service-worker push handlers, server-side `/push/subscribe` function storing to D1, and a streak-nudge
+  sender (deploy-gated). See `.dev.vars.example` for VAPID key documentation.
 
-**Not built yet:** recovery tracking, recommendations, progress photos (deferred to R2).
-See [Roadmap](#roadmap).
+**Not built yet:** recommendations, progress photos (deferred). See [Roadmap](#roadmap).
 
 Not deployed anywhere yet — runs locally for now.
 

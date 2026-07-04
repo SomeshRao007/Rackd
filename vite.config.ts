@@ -19,6 +19,8 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Pull the Web Push handlers (public/push-sw.js) into the generated SW without leaving generateSW (M7).
+      workbox: { importScripts: ['push-sw.js'] },
       manifest: {
         name: 'Rackd — Workout Tracker',
         short_name: 'Rackd',

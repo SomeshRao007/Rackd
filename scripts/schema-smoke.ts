@@ -17,6 +17,7 @@ import {
   exclusionSchema,
   goalSchema,
   bodyMetricSchema,
+  readinessSchema,
   type WorkoutDatabase,
 } from '../src/db/schema'
 
@@ -44,6 +45,7 @@ await db.addCollections({
   exclusions: { schema: exclusionSchema },
   goals: { schema: goalSchema },
   bodymetrics: { schema: bodyMetricSchema },
+  readiness: { schema: readinessSchema },
 })
 
 const base = {
@@ -125,5 +127,14 @@ const bm1 = await db.bodymetrics.findOne('bm1').exec()
 assert.equal(bm1?.weightKg, 80, 'body-metric weight round-trips')
 assert.equal(JSON.parse(bm1!.measurements!).waist, 84, 'body-metric measurements JSON round-trips')
 
-console.log('✓ schema smoke passed (index sort, order-count, idempotent session, plans + session v1, setlog rir/note + plan scheme v1, goals + bodymetrics v0)')
+// M7: readiness check-in, one row per day (userId_date), 0..2 taps.
+await db.readiness.insert({
+  id: 'u1_2026-06-22', userId: 'u1', date: '2026-06-22', sleep: 2, soreness: 1, energy: 2, note: null,
+  createdAt: '2026-06-22T07:00:00.000Z', updatedAt: '2026-06-22T07:00:00.000Z', deletedAt: null,
+})
+const rd1 = await db.readiness.findOne('u1_2026-06-22').exec()
+assert.equal(rd1?.sleep, 2, 'readiness sleep round-trips')
+assert.equal(rd1?.energy, 2, 'readiness energy round-trips')
+
+console.log('✓ schema smoke passed (index sort, order-count, idempotent session, plans + session v1, setlog rir/note + plan scheme v1, goals + bodymetrics + readiness v0)')
 await db.close()

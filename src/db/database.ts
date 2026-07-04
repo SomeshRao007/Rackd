@@ -9,6 +9,7 @@ import {
   exclusionSchema,
   goalSchema,
   bodyMetricSchema,
+  readinessSchema,
   type WorkoutDatabase,
 } from './schema'
 
@@ -59,6 +60,7 @@ async function create(): Promise<WorkoutDatabase> {
     exclusions: { schema: exclusionSchema },
     goals: { schema: goalSchema },
     bodymetrics: { schema: bodyMetricSchema },
+    readiness: { schema: readinessSchema },
   })
   return db
 }
