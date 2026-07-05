@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
-import type { Exercise, SetLog, PlannedDay, Session } from '../db/schema'
-import { addPickToDay } from '../db/plans'
+import type { Exercise, SetLog, PlannedDay, Session, CustomExercise } from '../db/schema'
+import { addPickToDay, startAdHocSession } from '../db/plans'
+import { customToExercise } from '../db/customExercises'
 import { type Unit, useUnit, formatWeight } from '../lib/units'
 import { trainingStreak } from '../lib/consistency'
 import { prsOn, type PR, type PRSet } from '../lib/pr'
@@ -31,15 +32,23 @@ export function Today() {
   const session = todaySessions[0] ?? null
   const sessionId = session?.id ?? null
 
-  // Catalog maps for swap names + the "rest this muscle" shortcut (M4).
+  // Add-exercise works from any state, incl. a cold start with no plan/session (replaces the Log tab):
+  // ensure today's session + a "Freestyle" day exist, then append the pick so it gets an inline logger.
+  const handleAdd = async (e: Exercise) => {
+    const sid = await startAdHocSession(userId)
+    await addPickToDay(sid, e)
+    setAdding(false)
+  }
+
+  // Catalog + custom maps for swap names, the micro-lesson, and the "rest this muscle" shortcut (M4).
+  // Custom exercises are merged so a logged custom lift resolves its name/muscle/equipment too (R1).
   const exercises = useRxData<Exercise>((db) => db.exercises.find(), [])
-  const nameOf = useMemo(() => new Map(exercises.map((e) => [e.id, e.name])), [exercises])
-  const muscleOf = useMemo(
-    () => new Map(exercises.map((e) => [e.id, e.primaryMuscles[0] ?? ''])),
-    [exercises],
-  )
+  const custom = useRxData<CustomExercise>((db) => db.customexercises.find({ selector: { userId, deletedAt: null } }), [userId])
+  const allEx = useMemo(() => [...exercises, ...custom.map(customToExercise)], [exercises, custom])
+  const nameOf = useMemo(() => new Map(allEx.map((e) => [e.id, e.name])), [allEx])
+  const muscleOf = useMemo(() => new Map(allEx.map((e) => [e.id, e.primaryMuscles[0] ?? ''])), [allEx])
   // equipment gates the plate calculator — only plate-loaded bars have a "per side" stack.
-  const equipmentOf = useMemo(() => new Map(exercises.map((e) => [e.id, e.equipment ?? ''])), [exercises])
+  const equipmentOf = useMemo(() => new Map(allEx.map((e) => [e.id, e.equipment ?? ''])), [allEx])
 
   const planned = useMemo<PlannedDay | null>(() => {
     if (!session?.plannedDay) return null
@@ -121,24 +130,28 @@ export function Today() {
           )}
         </>
       ) : sets.length === 0 ? (
-        <EmptyToday />
+        <EmptyToday onStart={() => setAdding(true)} />
       ) : (
         <>
           <Stats sets={sets.length} lifts={groups.length} volume={formatWeight(volumeKg, unit)} />
           <div className="mt-6">
             <LoggedGroups groups={groups} unit={unit} />
           </div>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="mt-3 w-full rounded-xl border border-dashed border-steel-700 px-4 py-3 text-sm font-semibold text-fog transition-colors hover:border-amber hover:text-amber"
+          >
+            + Add exercise
+          </button>
         </>
       )}
 
-      {adding && sessionId && (
+      {adding && (
         <ExercisePicker
           title="Add an exercise"
           exclude={planned?.picks.map((p) => p.exerciseId) ?? []}
-          onPick={(e) => {
-            void addPickToDay(sessionId, e)
-            setAdding(false)
-          }}
+          onPick={handleAdd}
           onClose={() => setAdding(false)}
         />
       )}
@@ -182,21 +195,21 @@ function Stat({ value, label, wide }: { value: string | number; label: string; w
   )
 }
 
-function EmptyToday() {
+function EmptyToday({ onStart }: { onStart: () => void }) {
   return (
     <div className="mt-10 rounded-2xl border border-dashed border-steel-700 px-6 py-12 text-center">
       <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-steel-800 text-3xl">🏋️</div>
       <h2 className="font-display text-xl font-bold">No sets logged yet</h2>
       <p className="mx-auto mt-1 max-w-xs text-sm text-fog">
-        Start from a plan, or head to the Log tab and put the first set on the board.
+        Start from a plan, or log a single lift to put the first set on the board.
       </p>
       <div className="mt-5 flex justify-center gap-3">
         <Link to="/app/plans" className="rounded-xl border border-steel-700 px-5 py-3 font-display font-black uppercase tracking-wide text-chalk transition-colors hover:bg-steel-800">
           Plans
         </Link>
-        <Link to="/app/log" className="rounded-xl bg-amber px-6 py-3 font-display font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright">
+        <button type="button" onClick={onStart} className="rounded-xl bg-amber px-6 py-3 font-display font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright">
           Start logging
-        </Link>
+        </button>
       </div>
     </div>
   )

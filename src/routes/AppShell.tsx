@@ -11,7 +11,6 @@ const SYNC_ON = import.meta.env.PROD || import.meta.env.VITE_SYNC === '1'
 
 const NAV = [
   { to: '/app/today', label: 'Today', icon: TodayIcon },
-  { to: '/app/log', label: 'Log', icon: LogIcon },
   { to: '/app/plans', label: 'Plans', icon: PlansIcon },
   { to: '/app/progress', label: 'Progress', icon: ProgressIcon },
   { to: '/app/history', label: 'History', icon: HistoryIcon },
@@ -148,13 +147,6 @@ function TodayIcon() {
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="4" width="18" height="18" rx="2" />
       <path d="M16 2v4M8 2v4M3 10h18" />
-    </svg>
-  )
-}
-function LogIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6.5 6.5h11M6.5 17.5h11M4 4v5M4 15v5M20 4v5M20 15v5M2 8h4M2 16h4M18 8h4M18 16h4" />
     </svg>
   )
 }

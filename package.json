@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:api": "npx wrangler pages dev",
     "seed": "tsx scripts/seed-catalog.ts",
+    "seed:bodymap": "tsx scripts/extract-bodymap.ts",
     "seed:plans": "tsx scripts/seed-starter-plans.ts",
     "smoke": "tsx scripts/schema-smoke.ts",
     "test": "tsx scripts/sync-test.ts && tsx scripts/rotation-test.ts && tsx scripts/generate-test.ts && tsx scripts/lifting-test.ts && tsx scripts/suggest-test.ts && tsx scripts/volume-test.ts && tsx scripts/goals-test.ts && tsx scripts/readiness-test.ts && tsx scripts/consistency-test.ts && tsx scripts/pr-test.ts && tsx scripts/gamification-test.ts",

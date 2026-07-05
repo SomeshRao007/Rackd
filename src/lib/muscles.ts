@@ -31,3 +31,44 @@ const MUSCLE_TO_GROUP = Object.fromEntries(
 
 /** The coarse group a catalog muscle belongs to; undefined for an unknown muscle. */
 export const groupOf = (muscle: string): MuscleGroupId | undefined => MUSCLE_TO_GROUP[muscle]
+
+// ── M8 body-map contract ────────────────────────────────────────────────────
+// Our 17 catalog muscles → the MuscleMap SVG slugs the BodyMap renders (public/bodymap).
+// A few are approximations (MuscleMap has no lats/abductors slug): lats/middle back share the
+// upper-back mass; abductors ride the gluteal region; abdominals light abs + obliques.
+export const MUSCLE_TO_BODYMAP: Record<string, string[]> = {
+  chest: ['chest'],
+  lats: ['upperBack'],
+  'middle back': ['upperBack'],
+  'lower back': ['lowerBack'],
+  traps: ['trapezius'],
+  shoulders: ['deltoids'],
+  neck: ['neck'],
+  biceps: ['biceps'],
+  triceps: ['triceps'],
+  forearms: ['forearm'],
+  quadriceps: ['quadriceps'],
+  hamstrings: ['hamstring'],
+  glutes: ['gluteal'],
+  calves: ['calves'],
+  adductors: ['adductors'],
+  abductors: ['gluteal'],
+  abdominals: ['abs', 'obliques'],
+}
+
+// Inverse: a rendered bodymap slug → its coarse group (drives heatmap fill + click-to-group).
+// Structural silhouette slugs (head/hands/feet/knees/ankles/tibialis/serratus) are absent →
+// they render as quiet base and aren't clickable to a group.
+export const SLUG_TO_GROUP: Record<string, MuscleGroupId> = Object.fromEntries(
+  GROUP_IDS.flatMap((g) =>
+    MUSCLE_GROUPS[g].flatMap((m) => (MUSCLE_TO_BODYMAP[m] ?? []).map((slug) => [slug, g])),
+  ),
+) as Record<string, MuscleGroupId>
+
+/** Every bodymap slug a group occupies (union of its muscles' slugs). */
+export const slugsForGroup = (g: MuscleGroupId): string[] =>
+  MUSCLE_GROUPS[g].flatMap((m) => MUSCLE_TO_BODYMAP[m] ?? [])
+
+/** Every bodymap slug a set of catalog muscles occupies. */
+export const slugsForMuscles = (muscles: string[]): string[] =>
+  muscles.flatMap((m) => MUSCLE_TO_BODYMAP[m] ?? [])

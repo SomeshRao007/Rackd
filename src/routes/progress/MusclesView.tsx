@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { useRxData } from '../../db/useRxData'
-import type { SetLog, Exercise } from '../../db/schema'
+import type { SetLog, Exercise, CustomExercise } from '../../db/schema'
+import { customToExercise } from '../../db/customExercises'
 import { useUnit, formatWeight } from '../../lib/units'
 import { GROUP_LABELS, type MuscleGroupId } from '../../lib/muscles'
 import { perGroupVolume, WINDOWS, sinceDays, type WindowDays } from '../../lib/volume'
@@ -18,11 +19,16 @@ export function MusclesView() {
 
   const setlogs = useRxData<SetLog>((db) => db.setlogs.find({ selector: { userId, deletedAt: null } }), [userId])
   const exercises = useRxData<Exercise>((db) => db.exercises.find(), [])
+  const custom = useRxData<CustomExercise>((db) => db.customexercises.find({ selector: { userId, deletedAt: null } }), [userId])
 
+  // Attribute setlogs to a primary muscle from BOTH the catalog and the user's custom exercises,
+  // so logged custom lifts light the heatmap + coverage bars too (R1 first-class).
   const muscleOf = useMemo(() => {
-    const m = new Map(exercises.map((e) => [e.id, e.primaryMuscles[0]]))
+    const m = new Map<string, string>()
+    for (const e of exercises) m.set(e.id, e.primaryMuscles[0])
+    for (const c of custom) { const ex = customToExercise(c); if (ex.primaryMuscles[0]) m.set(ex.id, ex.primaryMuscles[0]) }
     return (id: string) => m.get(id)
-  }, [exercises])
+  }, [exercises, custom])
 
   const groups = useMemo(
     () => perGroupVolume(setlogs, muscleOf, sinceDays(win, Date.now())),

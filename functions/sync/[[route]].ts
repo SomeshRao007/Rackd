@@ -13,6 +13,7 @@ const TABLES: Record<string, string[]> = {
   goals: ['id', 'userId', 'type', 'title', 'emphasis', 'targetMetric', 'targetExerciseId', 'targetValue', 'baselineValue', 'deadline', 'status', 'outcome', 'createdAt', 'updatedAt', 'deletedAt'],
   bodymetrics: ['id', 'userId', 'date', 'weightKg', 'measurements', 'note', 'createdAt', 'updatedAt', 'deletedAt'],
   readiness: ['id', 'userId', 'date', 'sleep', 'soreness', 'energy', 'note', 'createdAt', 'updatedAt', 'deletedAt'],
+  customexercises: ['id', 'userId', 'name', 'primaryMuscles', 'secondaryMuscles', 'equipment', 'instructions', 'source', 'createdAt', 'updatedAt', 'deletedAt'],
 }
 
 // `order` is a SQL keyword — quote it.
