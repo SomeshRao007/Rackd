@@ -49,6 +49,7 @@ export function suggestNext(opts: {
   today: string
   deload?: boolean
   stepKg?: number
+  readinessFactor?: number // M7 C5: <1 eases today's load for a low recovery score
 }): Suggestion | null {
   const { history, scheme, today } = opts
   if (history.length === 0) return null
@@ -78,6 +79,13 @@ export function suggestNext(opts: {
     out.weightKg *= DL.loadPct
     if (scheme === 'double') out.targetReps = DP.repLo
     out.reason = `Deload: ${out.reason}`
+  }
+
+  // Readiness (M7 C5): a low self-reported day eases today's load — a single-day nudge that
+  // composes with (and is milder than) the multi-week deload above. Factor floor lives in readiness.ts.
+  if (opts.readinessFactor != null && opts.readinessFactor < 1 && out.weightKg > 0) {
+    out.weightKg *= opts.readinessFactor
+    out.reason = `Easing ${Math.round((1 - opts.readinessFactor) * 100)}% for recovery — ${out.reason}`
   }
 
   if (out.weightKg > 0) out.weightKg = roundToStep(out.weightKg, opts.stepKg ?? 2.5)

@@ -206,6 +206,33 @@ const bodyMetricTyped = toTypedRxJsonSchema(bodyMetricSchemaLiteral)
 export type BodyMetric = ExtractDocumentTypeFromTypedRxJsonSchema<typeof bodyMetricTyped>
 export const bodyMetricSchema: RxJsonSchema<BodyMetric> = bodyMetricSchemaLiteral
 
+// ── Readiness (per-user, synced; M7 C5) ──────────────────────────────────────
+// One self-reported check-in per day (userId_date). sleep/soreness/energy are 0..2 taps, higher =
+// more recovered; the 0–100 score and load factor are DERIVED (src/lib/readiness.ts), never stored.
+const readinessSchemaLiteral = {
+  title: 'readiness',
+  version: 0,
+  primaryKey: 'id',
+  type: 'object',
+  properties: {
+    id: { type: 'string', maxLength: 100 },
+    userId: { type: 'string', maxLength: 100 },
+    date: { type: 'string', maxLength: 10 }, // YYYY-MM-DD
+    sleep: { type: 'number', minimum: 0, maximum: 2 },
+    soreness: { type: 'number', minimum: 0, maximum: 2 },
+    energy: { type: 'number', minimum: 0, maximum: 2 },
+    note: { type: ['string', 'null'] },
+    createdAt: { type: 'string' },
+    updatedAt: { type: 'string' },
+    deletedAt: { type: ['string', 'null'] },
+  },
+  required: ['id', 'userId', 'date', 'sleep', 'soreness', 'energy', 'createdAt', 'updatedAt'],
+  indexes: ['date'],
+} as const
+const readinessTyped = toTypedRxJsonSchema(readinessSchemaLiteral)
+export type Readiness = ExtractDocumentTypeFromTypedRxJsonSchema<typeof readinessTyped>
+export const readinessSchema: RxJsonSchema<Readiness> = readinessSchemaLiteral
+
 // Parsed `days` shapes — the in-memory contract for the builder + rotation.
 export type PlanSlot = { id: string; label: string; exercisePool: string[] }
 export type PlanDay = { id: string; label: string; slots: PlanSlot[] }
@@ -245,5 +272,6 @@ export type WorkoutCollections = {
   exclusions: RxCollection<Exclusion>
   goals: RxCollection<Goal>
   bodymetrics: RxCollection<BodyMetric>
+  readiness: RxCollection<Readiness>
 }
 export type WorkoutDatabase = RxDatabase<WorkoutCollections>

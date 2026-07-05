@@ -2,9 +2,13 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
-import type { Exercise, SetLog, PlannedDay } from '../db/schema'
+import type { Exercise, SetLog, PlannedDay, Session } from '../db/schema'
 import { addPickToDay } from '../db/plans'
 import { type Unit, useUnit, formatWeight } from '../lib/units'
+import { trainingStreak } from '../lib/consistency'
+import { prsOn, type PR, type PRSet } from '../lib/pr'
+import { quoteOfDay } from '../lib/quotes'
+import { lessonForMuscles } from '../lib/lessons'
 import { groupByExercise, totalVolumeKg, type ExerciseGroup } from '../components/groupSets'
 import { SetRow } from '../components/SetRow'
 import { PlannedExerciseRow } from '../components/PlannedExerciseRow'
@@ -66,6 +70,12 @@ export function Today() {
     return groups.filter((g) => !inPlan.has(g.exerciseId))
   }, [groups, planned])
 
+  // Day's primary muscles → micro-lesson (M7): the plan's picks when locked, else what's logged.
+  const lessonMuscles = useMemo(() => {
+    const ids = planned ? planned.picks.map((p) => p.exerciseId) : groups.map((g) => g.exerciseId)
+    return ids.map((id) => muscleOf.get(id) ?? '')
+  }, [planned, groups, muscleOf])
+
   return (
     <section>
       <h1 className="font-display text-3xl font-black tracking-tight">Today</h1>
@@ -73,6 +83,8 @@ export function Today() {
         {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
         {planned && <span className="ml-2 font-bold text-amber">· {planned.label}</span>}
       </p>
+
+      <MotivationStrip userId={userId} date={date} unit={unit} lessonMuscles={lessonMuscles} />
 
       {planned && sessionId ? (
         <>
@@ -186,6 +198,91 @@ function EmptyToday() {
           Start logging
         </Link>
       </div>
+    </div>
+  )
+}
+
+// Motivation strip (M7): weekly streak + daily quote, today's PR celebration, and a muscle micro-lesson.
+// Loads the full session/set history reactively; renders only the pieces that have data.
+function MotivationStrip({
+  userId,
+  date,
+  unit,
+  lessonMuscles,
+}: {
+  userId: string
+  date: string
+  unit: Unit
+  lessonMuscles: string[]
+}) {
+  const sessions = useRxData<Session>(
+    (db) => db.sessions.find({ selector: { userId, deletedAt: null } }),
+    [userId],
+  )
+  const setlogs = useRxData<SetLog>(
+    (db) => db.setlogs.find({ selector: { userId, deletedAt: null } }),
+    [userId],
+  )
+
+  const streak = useMemo(() => trainingStreak(sessions.map((s) => s.date), date), [sessions, date])
+
+  // Today's PRs, deduped to one per exercise+kind (highest value wins).
+  const prs = useMemo(() => {
+    const mapped: PRSet[] = setlogs.map((s) => ({
+      exerciseId: s.exerciseId,
+      exerciseName: s.exerciseName ?? '',
+      weightKg: s.weightKg,
+      reps: s.reps,
+      rir: s.rir,
+      createdAt: s.createdAt,
+    }))
+    const best = new Map<string, PR>()
+    for (const p of prsOn(mapped, date)) {
+      const key = `${p.exerciseName}|${p.kind}`
+      const cur = best.get(key)
+      if (!cur || p.value > cur.value) best.set(key, p)
+    }
+    return [...best.values()]
+  }, [setlogs, date])
+
+  const lesson = useMemo(() => lessonForMuscles(lessonMuscles), [lessonMuscles])
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div>
+        {streak.current > 0 ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-steel-800 px-3 py-1 text-sm font-bold text-amber">
+            <span aria-hidden>🔥</span>
+            <span className="nums">{streak.current}</span>-week streak
+          </span>
+        ) : (
+          <span className="text-sm font-semibold text-fog">Start your streak today.</span>
+        )}
+        <p className="mt-1.5 text-sm italic text-fog">{quoteOfDay(date)}</p>
+      </div>
+
+      {prs.length > 0 && (
+        <div className="rounded-xl border border-amber/40 bg-amber/10 px-4 py-3">
+          <ul className="space-y-1">
+            {prs.map((p) => (
+              <li key={`${p.exerciseName}|${p.kind}`} className="text-sm font-semibold text-chalk">
+                {p.kind === 'weight' ? (
+                  <>🏆 New PR — {p.exerciseName}: <span className="nums text-amber">{formatWeight(p.value, unit)}</span></>
+                ) : (
+                  <>🏆 {p.exerciseName}: <span className="nums text-amber">{formatWeight(p.value, unit)}</span> est. 1RM</>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {lesson && (
+        <div className="rounded-xl border border-steel-800 bg-steel-900 px-4 py-3">
+          <p className="text-sm font-bold text-chalk">💡 {lesson.title}</p>
+          <p className="mt-1 text-xs leading-relaxed text-fog">{lesson.body}</p>
+        </div>
+      )}
     </div>
   )
 }

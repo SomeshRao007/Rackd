@@ -85,6 +85,13 @@ assert.equal(dl.weightKg, 50, 'deload drops load 15%')
 assert.equal(dl.targetReps, 8, 'deload resets reps to 8')
 assert.ok(dl.reason.startsWith('Deload:'), 'deload reason is prefixed')
 
+// 12b. readiness factor (M7 C5): a low-recovery day eases the load; factor 1 leaves it unchanged.
+const fresh = suggestNext({ history: [set('s1', 60, 10, 2)], scheme: 'double', today: TODAY, readinessFactor: 1 })!
+assert.equal(fresh.weightKg, 60, 'readiness factor 1 → unchanged load')
+const rundown = suggestNext({ history: [set('s1', 60, 12, 2)], scheme: 'double', today: TODAY, readinessFactor: 0.9 })!
+assert.equal(rundown.weightKg, roundToStep(62.5 * 0.9), 'readiness 0.9 eases the promoted load (62.5→56.25→rounds 57.5)')
+assert.ok(rundown.reason.startsWith('Easing'), 'readiness reason is prefixed')
+
 // 13. multi-set last session: top weight 80, best reps there 7 (not the 60×10)
 const multi = suggestNext(
   { history: [set('s1', 60, 10), set('s1', 80, 5), set('s1', 80, 7)], scheme: 'double', today: TODAY },

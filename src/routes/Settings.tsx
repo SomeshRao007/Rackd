@@ -9,6 +9,7 @@ import {
   ALL_EQUIPMENT, type Environment,
 } from '../lib/prefs'
 import { MUSCLES } from '../lib/muscles'
+import { pushSupported, pushConfigured, pushPermission, subscribeToPush } from '../lib/push'
 
 // Duration presets for an exclusion; null = forever.
 const DURATIONS: { label: string; days: number | null }[] = [
@@ -99,6 +100,10 @@ export function Settings() {
         sets fit, up to the max above. Reps are set by exercise type (heavy lifts lower, isolation higher).
       </p>
 
+      {/* Workout reminders (M7) — native Web Push; deploy-gated behind VAPID config */}
+      <h2 className="mt-7 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Workout reminders</h2>
+      <ReminderToggle />
+
       {/* Exclusions */}
       <h2 className="mt-7 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Resting / avoiding</h2>
       <AddExclusion userId={userId} existing={active} />
@@ -128,6 +133,49 @@ export function Settings() {
         </p>
       )}
     </section>
+  )
+}
+
+function ReminderToggle() {
+  const { token } = useAuth()
+  const [status, setStatus] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  // Honest gates: reminders can't work without a push-capable browser AND a configured VAPID key
+  // (only present on a real deploy). Show why instead of a dead button.
+  if (!pushSupported())
+    return <p className="rounded-xl border border-dashed border-steel-700 px-4 py-4 text-sm text-fog">This browser can’t receive push notifications.</p>
+  if (!pushConfigured())
+    return <p className="rounded-xl border border-dashed border-steel-700 px-4 py-4 text-sm text-fog">Streak reminders switch on once the app is deployed with push keys. Your streak &amp; nudges already show on the Today screen.</p>
+
+  const granted = pushPermission() === 'granted'
+  const onEnable = async () => {
+    if (!token) return
+    setBusy(true)
+    const result = await subscribeToPush(token)
+    setBusy(false)
+    setStatus(
+      result === 'ok' ? 'Reminders on — we’ll nudge you if your streak is slipping.'
+        : result === 'denied' ? 'Notifications are blocked in your browser settings.'
+        : 'Couldn’t enable reminders. Try again later.',
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-steel-800 bg-steel-900 px-4 py-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-fog">Get a nudge when you’re about to lose your streak.</p>
+        <button
+          type="button"
+          onClick={onEnable}
+          disabled={busy || granted}
+          className={`shrink-0 rounded-lg px-3 py-2 text-sm font-bold transition-colors ${granted ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'}`}
+        >
+          {granted ? '✓ On' : busy ? 'Enabling…' : 'Enable'}
+        </button>
+      </div>
+      {status && <p className="mt-2 text-xs text-fog">{status}</p>}
+    </div>
   )
 }
 

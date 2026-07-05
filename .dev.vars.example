@@ -6,3 +6,11 @@ JWT_SECRET=generate-a-long-random-string
 # Local dev only — enables /auth/dev-login (real JWT for the stub user) so sync works
 # without Google. NEVER set this in production.
 AUTH_STUB=1
+
+# Web Push (M7 reminders) — DEPLOY-GATED. Generate a VAPID key pair (e.g. `npx web-push generate-vapid-keys`).
+# The PRIVATE key stays server-side (subscribe fn + Cron Worker); the PUBLIC key is also exposed to the
+# client build as VITE_VAPID_PUBLIC in a `.env` file (Vite only inlines VITE_-prefixed vars).
+VAPID_PUBLIC=your-vapid-public-key
+VAPID_PRIVATE=your-vapid-private-key
+VAPID_SUBJECT=mailto:you@example.com
+# In .env (client build): VITE_VAPID_PUBLIC=your-vapid-public-key

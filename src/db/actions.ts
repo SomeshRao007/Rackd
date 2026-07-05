@@ -1,6 +1,8 @@
 import { getDb } from './database'
 import { suggestNext, deloadDue, type Suggestion } from '../lib/suggest'
 import { todayISO, weekIndex } from '../lib/dates'
+import { readinessScore, readinessFactor } from '../lib/readiness'
+import { todayReadiness } from './readiness'
 import type { PlannedDay, SchemeId, Session, SetLog } from './schema'
 
 const now = () => new Date().toISOString()
@@ -91,7 +93,8 @@ export async function historyFor(
   return docs.map((d) => d.toJSON() as SetLog)
 }
 
-/** Next-load suggestion for an exercise under the plan's progression scheme (M5). */
+/** Next-load suggestion for an exercise under the plan's progression scheme (M5), eased by today's
+ * readiness check-in if one exists (M7 C5 — opt-in: no check-in ⇒ factor 1 ⇒ unchanged). */
 export async function suggestFor(
   userId: string,
   exerciseId: string,
@@ -99,7 +102,9 @@ export async function suggestFor(
   deload = false,
 ): Promise<Suggestion | null> {
   const history = await historyFor(userId, exerciseId)
-  return suggestNext({ history, scheme, today: todayISO(), deload })
+  const rd = await todayReadiness(userId, todayISO())
+  const factor = rd ? readinessFactor(readinessScore(rd)) : 1
+  return suggestNext({ history, scheme, today: todayISO(), deload, readinessFactor: factor })
 }
 
 // JSON.parse is the one boundary here that can throw (corrupt synced string) — contain it.

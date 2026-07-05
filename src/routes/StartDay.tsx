@@ -2,13 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useDb, useRxData } from '../db/useRxData'
-import type { Exercise, MobilityStep, Plan, PlanDay, PlannedPick, SchemeId } from '../db/schema'
+import type { Exercise, MobilityStep, Plan, PlanDay, PlannedPick, SchemeId, Readiness } from '../db/schema'
 import { resolveDay, lockDay } from '../db/plans'
 import { deloadStatus } from '../db/actions'
 import { fitToBudget, mobilityMinutes } from '../db/generate'
 import { SCHEMES, DELOAD_SET_FACTOR } from '../lib/suggest'
 import { usePrefs, setBudgetMin } from '../lib/prefs'
+import { todayReadiness, logReadiness } from '../db/readiness'
+import { readinessScore, readinessLabel } from '../lib/readiness'
 import { MobilityBlock } from '../components/MobilityBlock'
+
+const today = () => new Date().toISOString().slice(0, 10)
 
 export function StartDay() {
   const { id: planId, dayId } = useParams()
@@ -27,6 +31,11 @@ export function StartDay() {
   const [deloadReason, setDeloadReason] = useState<string | null>(null)
   const [deload, setDeload] = useState(false) // never auto-applied — the user opts in
   const [loading, setLoading] = useState(true)
+  const [readiness, setReadiness] = useState<Readiness | null>(null)
+  const [sleep, setSleep] = useState(1)
+  const [soreness, setSoreness] = useState(1)
+  const [energy, setEnergy] = useState(1)
+  const [redo, setRedo] = useState(false)
 
   const exercises = useRxData<Exercise>((d) => d.exercises.find(), [])
   const nameOf = useMemo(() => new Map(exercises.map((e) => [e.id, e.name])), [exercises])
@@ -72,6 +81,24 @@ export function StartDay() {
     }
   }, [userId])
 
+  // Readiness check-in (M7): today's row seeds the taps; the loggers read it for load auto-regulation.
+  useEffect(() => {
+    if (!userId) return
+    let alive = true
+    todayReadiness(userId, today()).then((r) => {
+      if (!alive) return
+      setReadiness(r)
+      if (r) {
+        setSleep(r.sleep)
+        setSoreness(r.soreness)
+        setEnergy(r.energy)
+      }
+    })
+    return () => {
+      alive = false
+    }
+  }, [userId])
+
   // Sets/reps fit the budget live (no budget → 2×10); load stays user-entered. Compounds favored.
   // Deload on → half the sets here; the −15% load happens in the loggers via the flag.
   // ponytail: preview reps come from fitToBudget's mechanic defaults; the scheme's reps win when the logger opens. Bake suggestions in at lock time if the mismatch confuses.
@@ -108,6 +135,15 @@ export function StartDay() {
     })
     navigate('/app/today')
   }
+
+  async function saveCheckin() {
+    const row = await logReadiness({ userId, date: today(), sleep, soreness, energy })
+    setReadiness(row)
+    setRedo(false)
+  }
+
+  const readinessLive = readinessScore({ sleep, soreness, energy })
+  const showCheckin = !readiness || redo
 
   if (loading) return <p className="mt-8 text-center text-fog">Loading…</p>
   if (!plan || !day) {
@@ -173,6 +209,45 @@ export function StartDay() {
           </button>
         </div>
       )}
+
+      {/* Readiness check-in (M7) — three taps → a 0–100 score; low days ease suggested loads in the loggers. */}
+      <section className="mt-4 rounded-2xl border border-steel-800 bg-steel-900 p-4">
+        <h2 className="font-display text-lg font-black text-chalk">Readiness check-in</h2>
+        {showCheckin ? (
+          <>
+            <div className="mt-3 space-y-3">
+              <TapRow label="Sleep" options={['Poor', 'OK', 'Great']} value={sleep} onChange={setSleep} />
+              <TapRow label="Soreness" options={['Sore', 'Meh', 'Fresh']} value={soreness} onChange={setSoreness} />
+              <TapRow label="Energy" options={['Drained', 'OK', 'Fired up']} value={energy} onChange={setEnergy} />
+            </div>
+            <p className="mt-3 text-sm text-chalk">
+              Readiness <span className="nums font-bold text-amber">{readinessLive}</span>/100 —{' '}
+              {readinessLabel(readinessLive)}
+            </p>
+            <button
+              type="button"
+              onClick={saveCheckin}
+              className="mt-3 w-full rounded-xl bg-amber py-3 font-display font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright"
+            >
+              Save check-in
+            </button>
+          </>
+        ) : (
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <p className="text-sm text-chalk">
+              Readiness <span className="nums font-bold text-amber">{readinessLive}</span>/100 —{' '}
+              {readinessLabel(readinessLive)}. Low days ease today's suggested loads automatically.
+            </p>
+            <button
+              type="button"
+              onClick={() => setRedo(true)}
+              className="shrink-0 text-sm font-semibold text-fog transition-colors hover:text-chalk"
+            >
+              Redo
+            </button>
+          </div>
+        )}
+      </section>
 
       {/* Time budget — sets/reps auto-fit; blank = no limit (default 2×10). */}
       <label className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-steel-800 bg-steel-900 px-4 py-3">
@@ -260,5 +335,42 @@ export function StartDay() {
         </div>
       )}
     </section>
+  )
+}
+
+// Three-tap selector row for the readiness check-in (M7). Index 0/1/2 = worst→best; amber = selected.
+function TapRow({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  options: string[]
+  value: number
+  onChange: (v: number) => void
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fog">{label}</div>
+      <div className="grid grid-cols-3 gap-2">
+        {options.map((opt, i) => {
+          const active = value === i
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(i)}
+              aria-pressed={active}
+              className={`rounded-lg px-2 py-2 text-sm font-semibold transition-colors ${
+                active ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'
+              }`}
+            >
+              {opt}
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
