@@ -74,7 +74,8 @@ Browser (PWA, React + Vite)
   │   ├─ plans                 — user's own workout plans (M3, M5: +scheme)
   │   ├─ exclusions            — temporary/permanent movement exclusions (M4)
   │   ├─ goals                 — weight-loss/strength/hypertrophy goals (M6)
-  │   └─ bodymetrics           — weight + measurements log (M6)
+  │   ├─ bodymetrics           — weight + measurements log (M6)
+  │   └─ readiness             — daily recovery check-in, one row/day (M7)
   ├─ localStorage              — device-local environment + equipment prefs (M4)
   ├─ static exercise catalog   — seeded once, versioned JSON
   ├─ starter plans             — seeded at build time, versioned JSON (M3)
@@ -85,11 +86,13 @@ Cloudflare Pages Functions
   ├─ /auth/*          — Google OAuth + email/password → mint JWT
   ├─ /sync            — push/pull RxDB collections, upsert + tombstone into D1, last-write-wins
   ├─ /share/publish   — publish a plan snapshot (owner-keyed upsert, stable shareCode) (M3)
-  └─ /share/[code]    — fetch a shared plan snapshot (M3)
+  ├─ /share/[code]    — fetch a shared plan snapshot (M3)
+  └─ /push/subscribe  — store a Web Push subscription (M7; delivery deploy-gated)
         ▼
 D1 (SQLite) — per-user rows: sessions (with nullable plannedDay), setlogs (M5: +rir, +note),
-              plans (M3, M5: +scheme), exclusions (M4), goals (M6), bodymetrics (M6)
+              plans (M3, M5: +scheme), exclusions (M4), goals (M6), bodymetrics (M6), readiness (M7)
             — cross-user immutable rows: shared_plans (M3)
+            — server-only rows: push_subscriptions (M7)
             ↕ pull restores the same data on a new device
 ```
 
@@ -111,7 +114,7 @@ npm run dev            # → http://localhost:5173
 
 ```bash
 cp .dev.vars.example .dev.vars        # set JWT_SECRET; Google keys optional, see below
-npx wrangler d1 migrations apply workout-db --local   # creates local D1 tables (M1-M6 migrations)
+npx wrangler d1 migrations apply workout-db --local   # creates local D1 tables (M1-M7 migrations)
 npm run seed:plans                     # generates starter plans into public/catalog/
 npm run dev:api   # terminal 1 — Pages Functions + local D1 on http://localhost:8788
 npm run dev       # terminal 2 — app on http://localhost:5173 (proxies /auth + /sync + /share to :8788)
@@ -128,7 +131,7 @@ Never set it in production.
 **Tests:**
 ```bash
 npm run smoke   # RxDB schema sanity check
-npm run test    # sync replication, rotation, session generation, progression (M5), volume aggregation (M6), goals (M6), lifting math
+npm run test    # 11 suites: sync replication, rotation, generation, progression (M5), volume + goals (M6), readiness + consistency + PR + gamification (M7), lifting math
 ```
 
 ## Using the app
@@ -154,13 +157,16 @@ npm run test    # sync replication, rotation, session generation, progression (M
    at role-based reps. The active progression scheme is shown; if a deload is suggested (based on accumulated
    fatigue), a banner offers to apply it (−15% load, half the sets). Mobility blocks appear for warm-up
    (stretches targeting the day's trained muscles) and cool-down, each with a seconds countdown.
-5. **Progress** (M6) — Bottom-nav tab with three sections. *Muscles*: see training volume (sets + tonnage) per muscle group
+   A quick **recovery check-in** (M7) — three taps for sleep, soreness, and energy — gives a 0–100
+   readiness score; on a run-down day the loggers ease that session's suggested weights automatically.
+5. **Progress** (M6, M7) — Bottom-nav tab with four sections. *Muscles*: see training volume (sets + tonnage) per muscle group
    over rolling 7/14/30/365-day windows; expand each group to drill into the 17 individual muscles; an overlay body-map
    heatmap shows which areas you've trained. *Goals*: create a goal (lose fat, gain strength on a specific lift, or build muscle),
    watch your progress with a bar, and get adaptive suggestions (add a least-recently-trained exercise, keep the current plan,
    or reduce volume). When you finish a goal and start a new one, the app asks if you want to reuse the last cycle's result.
    *Body*: log your current weight and any measurements (waist, chest, arms, thighs, hips); a hand-rolled weight-trend sparkline
-   visualizes your progress over time.
+   visualizes your progress over time. *Recovery* (M7): your readiness trend, current training streak (and best), a nudge if
+   you've been away long enough to lose progress, and goal-tied badges you've earned.
 6. **Today** — When a plan day is locked, each planned exercise appears as an inline mini-logger.
    For each exercise: see suggested weight + reps (from the plan's progression scheme), warm-up sets
    (steps down from the last working weight), and a plate calculator (barbell plate stack per side;
@@ -172,7 +178,8 @@ npm run test    # sync replication, rotation, session generation, progression (M
    explaining the exclusion takes effect on the next generated day (not the current session) and can be ended anytime in Settings.
    Ad-hoc exercises added mid-session can be saved to the plan so they recur next time.
    Rows turn green once you've logged the target number of sets. Any lifts logged outside the plan appear under "Also logged".
-   Stats show today's total set count, lift count, and volume.
+   Stats show today's total set count, lift count, and volume. A motivation strip (M7) sits at the top: your current
+   week-streak, a daily quote, a celebration when you set a personal record, and a short muscle micro-lesson for the day.
 7. **Log** — Search the exercise catalog and log weight + reps per set (logging is now inline on Today
    when following a plan). Last session's numbers for that exercise are pre-filled.
 8. **History** — Past sessions.
@@ -191,7 +198,7 @@ In rough order, each one shippable on its own:
 | ✓ Rules-based generation (M4) | Time-budget auto-assignment, equipment/environment awareness, injury exclusions, mobility blocks, warm-up sets, plate math, mid-workout swaps. |
 | ✓ Progression & intensity (M5) | Per-plan progression schemes (double & linear), automatic weight + reps suggestion, RIR logging, 1RM estimation, break re-entry, deload detection. |
 | ✓ Goals & body tracking (M6) | Weight-loss, strength, and hypertrophy goals with progress bars and adaptive suggestions. Body weight + measurements tracking with trend sparkline. Volume-by-muscle-group dashboard over 7/14/30/365-day windows with drill-down and body-map overlay. |
-| Recovery & consistency | Recovery-readiness score, streaks, nudges when you're falling off pace. |
+| ✓ Recovery, consistency & motivation (M7) | Daily recovery-readiness check-in that eases suggested load on run-down days; weekly training streaks + "cost of falling off" nudges; personal-record detection & celebration; goal-tied badges + per-session muscle micro-lessons; native Web Push reminder scaffold (delivery deploy-gated). |
 | Exercise intelligence | Visual muscle map per exercise; smart classification for custom exercises you add. |
 | Optional AI layer | Bring your own AI key to improve plans/recommendations. Never required — the app works fully without it. |
 
