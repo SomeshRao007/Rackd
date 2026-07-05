@@ -1,30 +1,35 @@
 // Consistency + "cost of falling off" engine (M7 R10). Pure: session dates in, streak and a
-// motivational detraining nudge out. Weekly (not daily) streaks so normal rest days don't break
-// them — mirrors the trained-weeks logic the deload check already uses (suggest.ts deloadDue).
+// motivational detraining nudge out. Streak counts distinct TRAINING DAYS with rest-day grace: a
+// run stays alive as long as consecutive training days are ≤ MAX_GAP_DAYS apart, so normal rest
+// days (up to 2 in a row) don't break it — a lifting app shouldn't punish healthy recovery.
 
-import { weekIndex, daysBetween } from './dates'
+import { daysBetween } from './dates'
 
-/** Current + best run of consecutive weeks with ≥1 session. `today` anchors "current". */
+// Train at least every 3rd day (≤2 rest days between sessions) to keep the run alive.
+const MAX_GAP_DAYS = 3
+
+/** Current + best run of training days, forgiving up to MAX_GAP_DAYS between them. `today` anchors "current". */
 export function trainingStreak(sessionDates: string[], today: string): { current: number; best: number } {
   if (sessionDates.length === 0) return { current: 0, best: 0 }
-  const weeks = [...new Set(sessionDates.map(weekIndex))].sort((a, b) => a - b)
+  // distinct training days (yyyy-mm-dd), ascending.
+  const days = [...new Set(sessionDates.map((d) => d.slice(0, 10)))].sort()
 
-  // best: longest consecutive run anywhere in the set.
+  // best: longest run where consecutive training days sit within the grace window.
   let best = 1
   let run = 1
-  for (let i = 1; i < weeks.length; i++) {
-    run = weeks[i] === weeks[i - 1] + 1 ? run + 1 : 1
+  for (let i = 1; i < days.length; i++) {
+    run = daysBetween(days[i - 1], days[i]) <= MAX_GAP_DAYS ? run + 1 : 1
     if (run > best) best = run
   }
 
-  // current: count back from this week — the streak is alive if trained this week or last.
-  const thisWeek = weekIndex(today)
-  const trained = new Set(weeks)
-  let anchor = trained.has(thisWeek) ? thisWeek : trained.has(thisWeek - 1) ? thisWeek - 1 : null
-  let current = 0
-  while (anchor != null && trained.has(anchor)) {
+  // current: the run ending at the latest training day — but only alive if that day is still within
+  // the grace window of today (else the streak has lapsed and resets to 0).
+  const last = days[days.length - 1]
+  if (daysBetween(last, today) > MAX_GAP_DAYS) return { current: 0, best }
+  let current = 1
+  for (let i = days.length - 1; i > 0; i--) {
+    if (daysBetween(days[i - 1], days[i]) > MAX_GAP_DAYS) break
     current++
-    anchor--
   }
   return { current, best }
 }

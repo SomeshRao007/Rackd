@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import type { Exercise, SetLog, CustomExercise } from '../db/schema'
@@ -16,6 +16,7 @@ type Tab = 'instructions' | 'records'
 
 export function ExerciseDetail() {
   const { id = '' } = useParams()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const userId = user?.id ?? ''
   const unit = useUnit()
@@ -33,12 +34,16 @@ export function ExerciseDetail() {
 
   return (
     <section className="pb-10">
-      <Link to="/app/plans" className="-ml-1 mb-3 flex items-center gap-1 text-sm font-semibold text-fog hover:text-chalk">
+      <button
+        type="button"
+        onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/app/today'))}
+        className="-ml-1 mb-3 flex items-center gap-1 text-sm font-semibold text-fog hover:text-chalk"
+      >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
           <path d="m15 18-6-6 6-6" />
         </svg>
         Back
-      </Link>
+      </button>
 
       {!ex ? (
         <p className="mt-10 text-center text-sm text-fog">Loading…</p>

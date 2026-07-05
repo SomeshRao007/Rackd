@@ -6,7 +6,7 @@ export type Badge = { id: string; label: string; earned: boolean; hint: string }
 
 export type BadgeInput = {
   sessionCount: number
-  streakWeeks: number // current weekly streak (consistency.trainingStreak.current)
+  streakDays: number // current day streak (consistency.trainingStreak.current)
   prCount: number
   goalCompletedCount: number // goals closed as hit (R7 outcome)
   activeGoalPct: number | null // progress % of the active goal, or null if none
@@ -17,7 +17,7 @@ export function badges(i: BadgeInput): Badge[] {
   return [
     { id: 'first-session', label: 'First rep', earned: i.sessionCount >= 1, hint: 'Log your first session.' },
     { id: 'ten-sessions', label: 'Ten in the bank', earned: i.sessionCount >= 10, hint: 'Log 10 sessions.' },
-    { id: 'streak-4', label: '4-week streak', earned: i.streakWeeks >= 4, hint: 'Train 4 weeks in a row.' },
+    { id: 'streak-7', label: '7-day streak', earned: i.streakDays >= 7, hint: 'Keep a 7-day training streak.' },
     { id: 'first-pr', label: 'Record breaker', earned: i.prCount >= 1, hint: 'Set a personal record.' },
     // goal-tied — only meaningful with an active/closed goal.
     { id: 'goal-halfway', label: 'Halfway there', earned: (i.activeGoalPct ?? 0) >= 50, hint: 'Reach 50% of your active goal.' },

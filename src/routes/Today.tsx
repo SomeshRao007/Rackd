@@ -15,6 +15,7 @@ import { SetRow } from '../components/SetRow'
 import { PlannedExerciseRow } from '../components/PlannedExerciseRow'
 import { MobilityBlock } from '../components/MobilityBlock'
 import { ExercisePicker } from '../components/ExercisePicker'
+import { ExerciseInfoLink } from '../components/ExerciseInfoLink'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -174,7 +175,10 @@ function LoggedGroups({ groups, unit }: { groups: ExerciseGroup[]; unit: Unit })
     <div className="space-y-5">
       {groups.map((g) => (
         <div key={g.exerciseId}>
-          <h2 className="mb-2 font-display text-lg font-bold">{g.exerciseName}</h2>
+          <div className="mb-2 flex items-center gap-1.5">
+            <h2 className="font-display text-lg font-bold">{g.exerciseName}</h2>
+            <ExerciseInfoLink exerciseId={g.exerciseId} label={g.exerciseName} />
+          </div>
           <ul className="space-y-1.5">
             {g.sets.map((s, i) => (
               <SetRow key={s.id} set={s} index={i} unit={unit} />
@@ -215,7 +219,7 @@ function EmptyToday({ onStart }: { onStart: () => void }) {
   )
 }
 
-// Motivation strip (M7): weekly streak + daily quote, today's PR celebration, and a muscle micro-lesson.
+// Motivation strip (M7): day streak + daily quote, today's PR celebration, and a muscle micro-lesson.
 // Loads the full session/set history reactively; renders only the pieces that have data.
 function MotivationStrip({
   userId,
@@ -266,7 +270,7 @@ function MotivationStrip({
         {streak.current > 0 ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-steel-800 px-3 py-1 text-sm font-bold text-amber">
             <span aria-hidden>🔥</span>
-            <span className="nums">{streak.current}</span>-week streak
+            <span className="nums">{streak.current}</span>-day streak
           </span>
         ) : (
           <span className="text-sm font-semibold text-fog">Start your streak today.</span>

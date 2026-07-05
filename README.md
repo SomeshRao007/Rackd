@@ -40,12 +40,12 @@ session. That part isn't built yet (see [Roadmap](#roadmap)).
   collections (goals, bodymetrics) and D1.
 - **M7: Recovery, consistency & motivation** — Daily 3-tap recovery-readiness check-in (sleep / soreness / energy) on Start Day,
   stored in synced `readiness` collection; a derived 0–100 score eases suggested load on run-down days (a readinessFactor in the
-  progression engine). Weekly training-streak tracking with detraining nudge when falling off pace. Today screen shows a streak chip,
-  daily motivational quote, and per-session muscle micro-lesson. Personal record detection and celebration: top weight and estimated
-  1RM PRs from the progression engine. New Recovery tab under Progress showing readiness trend sparkline, streak tiles, detraining
-  warning, and gamification badges (streak/PR/goal state derived from synced data, no new stored state). Native Web Push scaffold:
-  client subscribe helper, service-worker push handlers, server-side `/push/subscribe` function storing to D1, and a streak-nudge
-  sender (deploy-gated). See `.dev.vars.example` for VAPID key documentation.
+  progression engine). Training-streak tracking (measured in distinct training days; stays alive with up to 2 rest days between sessions)
+  with detraining nudge when falling off pace. Today screen shows a streak chip, daily motivational quote, and per-session muscle micro-lesson.
+  Personal record detection and celebration: top weight and estimated 1RM PRs from the progression engine. New Recovery tab under Progress
+  showing readiness trend sparkline, streak tiles, detraining warning, and gamification badges (streak/PR/goal state derived from synced data,
+  no new stored state). Native Web Push scaffold: client subscribe helper, service-worker push handlers, server-side `/push/subscribe`
+  function storing to D1, and a streak-nudge sender (deploy-gated). See `.dev.vars.example` for VAPID key documentation.
 - **M8: Exercise intelligence & anatomical body-map** — Replaced primitive-shape body outline with a real male/female + front/back
   anatomical muscle map (SVG paths vendored from MuscleMap). Sex toggle in Settings (localStorage `wa_sex`). New `customexercises`
   RxDB collection with smart auto-classification: create custom exercises by name, and the app auto-tags worked muscles via keyword
@@ -182,21 +182,22 @@ npm run test    # 11 suites: sync replication, rotation, generation, progression
    watch your progress with a bar, and get adaptive suggestions (add a least-recently-trained exercise, keep the current plan,
    or reduce volume). When you finish a goal and start a new one, the app asks if you want to reuse the last cycle's result.
    *Body*: log your current weight and any measurements (waist, chest, arms, thighs, hips); a hand-rolled weight-trend sparkline
-   visualizes your progress over time. *Recovery* (M7): your readiness trend, current training streak (and best), a nudge if
-   you've been away long enough to lose progress, and goal-tied badges you've earned.
+   visualizes your progress over time. *Recovery* (M7): your readiness trend, current training day streak (and best, forgiving up to 2 rest days
+   between sessions), a nudge if you've been away long enough to lose progress, and goal-tied badges you've earned.
 6. **Today** (M8) — When a plan day is locked, each planned exercise appears as an inline mini-logger.
    For each exercise: see suggested weight + reps (from the plan's progression scheme), warm-up sets
    (steps down from the last working weight), and a plate calculator (barbell plate stack per side;
-   edit the bar weight in the calculator if your bar is not 20 kg). Tap a row to expand it, log weight × reps per set.
+   edit the bar weight in the calculator if your bar is not 20 kg). A small ⓘ button on each exercise opens its detail page
+   with instructions, worked muscles, and cross-session records. Tap a row to expand it, log weight × reps per set.
    Optionally log RIR (reps in reserve, 0–5 scale) and a per-set note for each set; these feed the progression
    engine and are shown in history. Mid-workout actions: swap to a different exercise (drawing from your plan's pool),
    add a new exercise from the catalog (an "+ Add exercise" button at the bottom), or temporarily exclude an exercise
    or muscle group to rest. When you exclude an exercise ("Rest this lift" or "Rest {muscle}"), an inline confirmation appears
    explaining the exclusion takes effect on the next generated day (not the current session) and can be ended anytime in Settings.
    Ad-hoc exercises added mid-session can be saved to the plan so they recur next time.
-   Rows turn green once you've logged the target number of sets. Any lifts logged outside the plan appear under "Also logged".
-   Stats show today's total set count, lift count, and volume. A motivation strip (M7) sits at the top: your current
-   week-streak, a daily quote, a celebration when you set a personal record, and a short muscle micro-lesson for the day.
+   Rows turn green once you've logged the target number of sets. Any lifts logged outside the plan appear under "Also logged",
+   each also with an ⓘ button to view details. Stats show today's total set count, lift count, and volume. A motivation strip (M7) sits
+   at the top: your current day streak, a daily quote, a celebration when you set a personal record, and a short muscle micro-lesson for the day.
    To log lifting without a plan, use the empty-state "Start logging" button or the "+ Add exercise" action to create a "Freestyle"
    session and log on-the-fly. Last session's numbers for each exercise are pre-filled.
 7. **History** — Past sessions.
