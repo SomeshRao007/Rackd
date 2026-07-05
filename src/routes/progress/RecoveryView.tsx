@@ -71,7 +71,7 @@ export function RecoveryView() {
     () =>
       badges({
         sessionCount: sessions.length,
-        streakWeeks: streak.current,
+        streakDays: streak.current,
         prCount,
         goalCompletedCount: goalStats.completedCount,
         activeGoalPct: goalStats.activePct,
@@ -106,7 +106,7 @@ export function RecoveryView() {
       {sessions.length > 0 && (
         <section>
           <div className="grid grid-cols-2 gap-3">
-            <StatTile value={streak.current} label="week streak" />
+            <StatTile value={streak.current} label="day streak" />
             <StatTile value={streak.best} label="best streak" />
           </div>
           {risk && (

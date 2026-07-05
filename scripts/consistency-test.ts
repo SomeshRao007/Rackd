@@ -5,28 +5,33 @@
 import assert from 'node:assert/strict'
 import { trainingStreak, detrainingRisk, daysSinceLastSession } from '../src/lib/consistency.ts'
 
-// Dates 7 days apart are always consecutive weeks (7 days = exactly one weekIndex step).
-const w = ['2026-06-01', '2026-06-08', '2026-06-15', '2026-06-22'] // 4 consecutive weeks
+// Day streak with rest-day grace: gaps ≤ 3 calendar days (up to 2 rest days) keep the run alive;
+// a bigger gap breaks it. 4 training days here, gaps of 2, 2, 3 days — all within grace.
+const d = ['2026-06-01', '2026-06-03', '2026-06-05', '2026-06-08']
 
-// 1. four-in-a-row, still training this week
-let s = trainingStreak(w, '2026-06-24')
-assert.equal(s.current, 4, 'current = 4 consecutive weeks')
+// 1. four training days, run still alive today (1 day after the last)
+let s = trainingStreak(d, '2026-06-09')
+assert.equal(s.current, 4, 'current = 4 training days, all within the grace window')
 assert.equal(s.best, 4, 'best = 4')
 
-// 2. streak stays alive if you trained LAST week but not yet this week
-s = trainingStreak(w, '2026-06-29') // week after 06-22
-assert.equal(s.current, 4, 'trained last week → streak still alive')
+// 2. still alive at the edge of the grace window (3 days since last session)
+s = trainingStreak(d, '2026-06-11')
+assert.equal(s.current, 4, 'last session within grace → streak still alive')
 
-// 3. streak dies after a fully missed week
-s = trainingStreak(w, '2026-07-13') // 3 weeks past last session
-assert.equal(s.current, 0, 'gap kills current streak')
+// 3. streak dies once today is past the grace window (5 days off)
+s = trainingStreak(d, '2026-06-13')
+assert.equal(s.current, 0, 'gap beyond grace kills current streak')
 assert.equal(s.best, 4, 'best is remembered')
 
-// 4. a mid gap splits the runs
-const gapped = ['2026-06-01', '2026-06-08', '2026-06-22', '2026-06-29'] // skip the 06-15 week
-s = trainingStreak(gapped, '2026-06-30')
-assert.equal(s.current, 2, 'current counts back only to the gap')
+// 4. a gap wider than grace splits the runs
+const gapped = ['2026-06-01', '2026-06-03', '2026-06-10', '2026-06-12'] // 7-day gap in the middle
+s = trainingStreak(gapped, '2026-06-13')
+assert.equal(s.current, 2, 'current counts back only to the wide gap')
 assert.equal(s.best, 2, 'best run is 2 (either side of the gap)')
+
+// 4b. duplicate sessions on the same day count once
+s = trainingStreak(['2026-06-01', '2026-06-01', '2026-06-02'], '2026-06-02')
+assert.equal(s.current, 2, 'same-day sessions dedupe to one training day')
 
 // 5. empty history
 assert.deepEqual(trainingStreak([], '2026-06-30'), { current: 0, best: 0 }, 'no sessions → zeros')
@@ -39,7 +44,7 @@ assert.equal(detrainingRisk(25)?.level, 'losing', '3+ weeks → losing')
 assert.ok(detrainingRisk(15, 'Chest')?.message.includes('chest'), 'personalises to the top group')
 
 // 7. days since last session
-assert.equal(daysSinceLastSession(w, '2026-06-25'), 3, '3 days since 06-22')
+assert.equal(daysSinceLastSession(d, '2026-06-11'), 3, '3 days since 06-08')
 assert.equal(daysSinceLastSession([], '2026-06-25'), null, 'no sessions → null')
 
-console.log('✓ consistency test passed (weekly streak current/best, gap handling, detraining thresholds)')
+console.log('✓ consistency test passed (day streak w/ rest-day grace, gap handling, detraining thresholds)')
