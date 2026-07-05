@@ -18,6 +18,7 @@ import {
   goalSchema,
   bodyMetricSchema,
   readinessSchema,
+  customExerciseSchema,
   type WorkoutDatabase,
 } from '../src/db/schema'
 
@@ -46,6 +47,7 @@ await db.addCollections({
   goals: { schema: goalSchema },
   bodymetrics: { schema: bodyMetricSchema },
   readiness: { schema: readinessSchema },
+  customexercises: { schema: customExerciseSchema },
 })
 
 const base = {
@@ -136,5 +138,15 @@ const rd1 = await db.readiness.findOne('u1_2026-06-22').exec()
 assert.equal(rd1?.sleep, 2, 'readiness sleep round-trips')
 assert.equal(rd1?.energy, 2, 'readiness energy round-trips')
 
-console.log('✓ schema smoke passed (index sort, order-count, idempotent session, plans + session v1, setlog rir/note + plan scheme v1, goals + bodymetrics + readiness v0)')
+// M8 R1: custom exercise; array fields ride as JSON strings (flat-column sync), parsed back in the UI.
+await db.customexercises.insert({
+  id: 'cx1', userId: 'u1', name: 'Hip Thrust',
+  primaryMuscles: JSON.stringify(['glutes']), secondaryMuscles: JSON.stringify(['hamstrings']),
+  equipment: 'barbell', instructions: JSON.stringify([]), source: 'custom',
+  createdAt: '2026-06-22T07:00:00.000Z', updatedAt: '2026-06-22T07:00:00.000Z', deletedAt: null,
+})
+const cx1 = await db.customexercises.findOne('cx1').exec()
+assert.equal(JSON.parse(cx1!.primaryMuscles)[0], 'glutes', 'custom-exercise primaryMuscles JSON round-trips')
+
+console.log('✓ schema smoke passed (index sort, order-count, idempotent session, plans + session v1, setlog rir/note + plan scheme v1, goals + bodymetrics + readiness + customexercises v0)')
 await db.close()

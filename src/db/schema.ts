@@ -233,6 +233,36 @@ const readinessTyped = toTypedRxJsonSchema(readinessSchemaLiteral)
 export type Readiness = ExtractDocumentTypeFromTypedRxJsonSchema<typeof readinessTyped>
 export const readinessSchema: RxJsonSchema<Readiness> = readinessSchemaLiteral
 
+// ── Custom exercise (per-user, synced; M8 R1) ────────────────────────────────
+// A user-created exercise. Kept in its OWN collection (the catalog `exercises` is unsynced + has no
+// userId). Array fields ride as JSON strings so they flow through the flat-column /sync handler
+// unchanged (same trick as bodymetrics.measurements); customToExercise() parses them back to the
+// catalog Exercise shape so the detail card + body-map treat custom and catalog lifts identically.
+const customExerciseSchemaLiteral = {
+  title: 'customexercise',
+  version: 0,
+  primaryKey: 'id',
+  type: 'object',
+  properties: {
+    id: { type: 'string', maxLength: 100 },
+    userId: { type: 'string', maxLength: 100 },
+    name: { type: 'string' },
+    primaryMuscles: { type: 'string' }, // JSON string[]
+    secondaryMuscles: { type: 'string' }, // JSON string[]
+    equipment: { type: 'string' },
+    instructions: { type: 'string' }, // JSON string[]
+    source: { type: 'string' }, // always 'custom'
+    createdAt: { type: 'string' },
+    updatedAt: { type: 'string' },
+    deletedAt: { type: ['string', 'null'] },
+  },
+  required: ['id', 'userId', 'name', 'primaryMuscles', 'createdAt', 'updatedAt'],
+  indexes: ['userId'],
+} as const
+const customExerciseTyped = toTypedRxJsonSchema(customExerciseSchemaLiteral)
+export type CustomExercise = ExtractDocumentTypeFromTypedRxJsonSchema<typeof customExerciseTyped>
+export const customExerciseSchema: RxJsonSchema<CustomExercise> = customExerciseSchemaLiteral
+
 // Parsed `days` shapes — the in-memory contract for the builder + rotation.
 export type PlanSlot = { id: string; label: string; exercisePool: string[] }
 export type PlanDay = { id: string; label: string; slots: PlanSlot[] }
@@ -273,5 +303,6 @@ export type WorkoutCollections = {
   goals: RxCollection<Goal>
   bodymetrics: RxCollection<BodyMetric>
   readiness: RxCollection<Readiness>
+  customexercises: RxCollection<CustomExercise>
 }
 export type WorkoutDatabase = RxDatabase<WorkoutCollections>

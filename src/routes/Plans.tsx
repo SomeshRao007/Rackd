@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
-import type { Plan, PlanDay } from '../db/schema'
+import type { Plan, PlanDay, Exercise, CustomExercise } from '../db/schema'
 import { createPlan, deletePlan, adoptPlan, fetchSharedPlan } from '../db/plans'
+import { customToExercise } from '../db/customExercises'
+import { CreateCustomExercise } from '../components/CreateCustomExercise'
 
 type Starter = { id: string; name: string; days: PlanDay[] }
 const parseDays = (p: Plan): PlanDay[] => {
@@ -24,6 +26,7 @@ export function Plans() {
     [userId],
   )
 
+  const [view, setView] = useState<'plans' | 'exercises'>('plans')
   const [browsing, setBrowsing] = useState(false)
   const [starters, setStarters] = useState<Starter[]>([])
   const [code, setCode] = useState('')
@@ -68,7 +71,29 @@ export function Plans() {
   return (
     <section>
       <h1 className="font-display text-3xl font-black tracking-tight">Plans</h1>
-      <p className="mt-1 text-sm text-fog">Build a split; exercises rotate across sessions.</p>
+
+      <div role="tablist" aria-label="View" className="mt-4 flex gap-2">
+        {(['plans', 'exercises'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            role="tab"
+            aria-selected={view === v}
+            onClick={() => setView(v)}
+            className={`flex-1 rounded-xl py-2 text-sm font-bold uppercase tracking-wide transition-colors ${
+              view === v ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'
+            }`}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+
+      {view === 'exercises' ? (
+        <ExercisesList />
+      ) : (
+      <>
+      <p className="mt-4 text-sm text-fog">Build a split; exercises rotate across sessions.</p>
 
       {plans.length === 0 ? (
         <p className="mt-6 rounded-xl border border-dashed border-steel-700 px-4 py-8 text-center text-sm text-fog">
@@ -163,11 +188,87 @@ export function Plans() {
         </div>
         {notice && <p className="mt-2 text-sm text-red-400">{notice}</p>}
       </div>
+      </>
+      )}
 
       {browsing && (
         <StarterBrowser starters={starters} onAdopt={onAdoptStarter} onClose={() => setBrowsing(false)} />
       )}
     </section>
+  )
+}
+
+// Browsable exercise library (M8) — the Log tab's global search now lives under Plans. Every row
+// opens the reusable ExerciseDetail (instructions ⇄ records). Catalog + the user's custom exercises
+// (M8 R1) share the list; custom lifts are tagged and a "＋ Create custom" affordance seeds new ones.
+function ExercisesList() {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const userId = user?.id ?? ''
+  const [query, setQuery] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  const exercises = useRxData<Exercise>((db) => db.exercises.find(), [])
+  const custom = useRxData<CustomExercise>(
+    (db) => db.customexercises.find({ selector: { userId, deletedAt: null } }),
+    [userId],
+  )
+
+  const customIds = useMemo(() => new Set(custom.map((c) => c.id)), [custom])
+  const all = useMemo(() => [...custom.map(customToExercise), ...exercises], [custom, exercises])
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const pool = q ? all.filter((e) => e.name.toLowerCase().includes(q)) : all
+    return [...pool].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 60)
+  }, [all, query])
+
+  return (
+    <div className="mt-4">
+      <input
+        type="search"
+        inputMode="search"
+        autoComplete="off"
+        aria-label="Search exercises"
+        placeholder="Bench, squat, curl…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        className="w-full rounded-xl border border-steel-700 bg-steel-900 px-4 py-3 text-base text-chalk placeholder:text-steel-600 focus-visible:border-amber focus-visible:outline-none"
+      />
+      <button
+        type="button"
+        onClick={() => setCreating(true)}
+        className="mt-3 w-full rounded-xl border border-dashed border-steel-700 px-4 py-3 text-sm font-semibold text-fog transition-colors hover:border-amber hover:text-amber"
+      >
+        ＋ Create custom exercise
+      </button>
+      <ul className="mt-3 space-y-1.5">
+        {matches.map((e) => (
+          <li key={e.id}>
+            <button
+              type="button"
+              onClick={() => navigate(`/app/exercises/${encodeURIComponent(e.id)}`)}
+              className="flex w-full items-center gap-3 rounded-xl bg-steel-900 px-4 py-3 text-left transition-colors hover:bg-steel-800 focus-visible:outline-2 focus-visible:outline-amber"
+            >
+              <span className="flex-1 font-semibold">{e.name}</span>
+              {customIds.has(e.id) && (
+                <span className="rounded-full bg-amber/15 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-amber">custom</span>
+              )}
+              <span className="text-xs uppercase tracking-wide text-fog">{e.primaryMuscles[0] ?? e.equipment}</span>
+            </button>
+          </li>
+        ))}
+        {matches.length === 0 && <li className="py-8 text-center text-sm text-fog">No lifts match.</li>}
+      </ul>
+
+      {creating && (
+        <CreateCustomExercise
+          initialName={query}
+          onCreated={(id) => navigate(`/app/exercises/${encodeURIComponent(id)}`)}
+          onClose={() => setCreating(false)}
+        />
+      )}
+    </div>
   )
 }
 

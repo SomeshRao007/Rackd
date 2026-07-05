@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
+import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
-import type { Exercise } from '../db/schema'
+import type { Exercise, CustomExercise } from '../db/schema'
+import { customToExercise } from '../db/customExercises'
 
 const MAX_RESULTS = 50
 
@@ -17,19 +19,23 @@ export function ExercisePicker({
   onPick: (e: Exercise) => void
   onClose: () => void
 }) {
+  const { user } = useAuth()
+  const userId = user?.id ?? ''
   const [query, setQuery] = useState('')
   const exercises = useRxData<Exercise>((db) => db.exercises.find(), [])
+  const custom = useRxData<CustomExercise>((db) => db.customexercises.find({ selector: { userId, deletedAt: null } }), [userId])
   const excludeKey = exclude.join('|')
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase()
     const skip = new Set(excludeKey ? excludeKey.split('|') : [])
-    const pool = q ? exercises.filter((e) => e.name.toLowerCase().includes(q)) : exercises
+    const all = [...custom.map(customToExercise), ...exercises]
+    const pool = q ? all.filter((e) => e.name.toLowerCase().includes(q)) : all
     return [...pool]
       .filter((e) => !skip.has(e.id))
       .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, MAX_RESULTS)
-  }, [exercises, query, excludeKey])
+  }, [exercises, custom, query, excludeKey])
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-ink/95 backdrop-blur">

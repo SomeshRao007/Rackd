@@ -9,6 +9,7 @@ import {
   ALL_EQUIPMENT, type Environment,
 } from '../lib/prefs'
 import { MUSCLES } from '../lib/muscles'
+import { useSex, setSex, type Sex } from '../lib/sex'
 import { pushSupported, pushConfigured, pushPermission, subscribeToPush } from '../lib/push'
 
 // Duration presets for an exclusion; null = forever.
@@ -50,6 +51,11 @@ export function Settings() {
         Back
       </Link>
       <h1 className="font-display text-3xl font-black tracking-tight">Settings</h1>
+
+      {/* Body figure — which anatomical body-map to draw (Progress + every exercise card) */}
+      <h2 className="mt-6 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Body</h2>
+      <BodyToggle />
+      <p className="mt-1.5 text-xs text-fog">Sets the muscle-map figure shown on your Progress and exercise screens.</p>
 
       {/* Environment */}
       <h2 className="mt-6 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Environment</h2>
@@ -133,6 +139,25 @@ export function Settings() {
         </p>
       )}
     </section>
+  )
+}
+
+function BodyToggle() {
+  const sex = useSex()
+  return (
+    <div role="group" aria-label="Body figure" className="flex overflow-hidden rounded-xl border border-steel-700 text-sm font-bold">
+      {(['male', 'female'] as Sex[]).map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => setSex(s)}
+          aria-pressed={sex === s}
+          className={`flex-1 py-3 capitalize transition-colors ${sex === s ? 'bg-amber text-ink' : 'text-fog hover:text-chalk'}`}
+        >
+          {s}
+        </button>
+      ))}
+    </div>
   )
 }
 

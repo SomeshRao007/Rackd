@@ -159,6 +159,21 @@ function deriveMobility(
   return { warmup, cooldown: pickN(4) }
 }
 
+// Start (or reuse) today's session for ad-hoc logging with no plan: ensures an empty "Freestyle"
+// planned day exists so exercises can be added + logged from a cold start (rest day, no plan) —
+// this is the logging entry the removed Log tab used to provide. Idempotent: never overwrites a
+// real locked plan day.
+export async function startAdHocSession(userId: string): Promise<string> {
+  const session = await getOrCreateTodaySession(userId)
+  const db = await getDb()
+  const doc = await db.sessions.findOne(session.id).exec()
+  if (doc && !doc.plannedDay) {
+    const planned: PlannedDay = { planId: '', dayId: 'adhoc', label: 'Freestyle', scheme: 'double', picks: [] }
+    await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
+  }
+  return session.id
+}
+
 /** Lock the previewed day onto today's session (the session it instances). */
 export async function lockDay(userId: string, planned: PlannedDay): Promise<void> {
   const session = await getOrCreateTodaySession(userId)
