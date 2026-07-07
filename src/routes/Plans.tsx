@@ -220,7 +220,7 @@ function ExercisesList() {
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase()
     const pool = q ? all.filter((e) => e.name.toLowerCase().includes(q)) : all
-    return [...pool].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 60)
+    return [...pool].sort((a, b) => a.name.localeCompare(b.name))
   }, [all, query])
 
   return (

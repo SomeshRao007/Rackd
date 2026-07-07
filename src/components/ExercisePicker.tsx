@@ -4,8 +4,6 @@ import { useRxData } from '../db/useRxData'
 import type { Exercise, CustomExercise } from '../db/schema'
 import { customToExercise } from '../db/customExercises'
 
-const MAX_RESULTS = 50
-
 /** Searchable catalog picker (same pattern as the Log screen), reused by the plan
  *  builder (add to a slot's pool) and the start-day swap. Renders as a panel. */
 export function ExercisePicker({
@@ -34,7 +32,6 @@ export function ExercisePicker({
     return [...pool]
       .filter((e) => !skip.has(e.id))
       .sort((a, b) => a.name.localeCompare(b.name))
-      .slice(0, MAX_RESULTS)
   }, [exercises, custom, query, excludeKey])
 
   return (

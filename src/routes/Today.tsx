@@ -177,7 +177,7 @@ function LoggedGroups({ groups, unit }: { groups: ExerciseGroup[]; unit: Unit })
         <div key={g.exerciseId}>
           <div className="mb-2 flex items-center gap-1.5">
             <h2 className="font-display text-lg font-bold">{g.exerciseName}</h2>
-            <ExerciseInfoLink exerciseId={g.exerciseId} label={g.exerciseName} />
+            <ExerciseInfoLink exerciseId={g.exerciseId} label={g.exerciseName} showText />
           </div>
           <ul className="space-y-1.5">
             {g.sets.map((s, i) => (

@@ -187,7 +187,7 @@ npm run test    # 11 suites: sync replication, rotation, generation, progression
 6. **Today** (M8) — When a plan day is locked, each planned exercise appears as an inline mini-logger.
    For each exercise: see suggested weight + reps (from the plan's progression scheme), warm-up sets
    (steps down from the last working weight), and a plate calculator (barbell plate stack per side;
-   edit the bar weight in the calculator if your bar is not 20 kg). A small ⓘ button on each exercise opens its detail page
+   edit the bar weight in the calculator if your bar is not 20 kg). A labeled "Info" button on each exercise opens its detail page
    with instructions, worked muscles, and cross-session records. Tap a row to expand it, log weight × reps per set.
    Optionally log RIR (reps in reserve, 0–5 scale) and a per-set note for each set; these feed the progression
    engine and are shown in history. Mid-workout actions: swap to a different exercise (drawing from your plan's pool),
@@ -196,7 +196,7 @@ npm run test    # 11 suites: sync replication, rotation, generation, progression
    explaining the exclusion takes effect on the next generated day (not the current session) and can be ended anytime in Settings.
    Ad-hoc exercises added mid-session can be saved to the plan so they recur next time.
    Rows turn green once you've logged the target number of sets. Any lifts logged outside the plan appear under "Also logged",
-   each also with an ⓘ button to view details. Stats show today's total set count, lift count, and volume. A motivation strip (M7) sits
+   each also with an "Info" button to view details. Stats show today's total set count, lift count, and volume. A motivation strip (M7) sits
    at the top: your current day streak, a daily quote, a celebration when you set a personal record, and a short muscle micro-lesson for the day.
    To log lifting without a plan, use the empty-state "Start logging" button or the "+ Add exercise" action to create a "Freestyle"
    session and log on-the-fly. Last session's numbers for each exercise are pre-filled.
