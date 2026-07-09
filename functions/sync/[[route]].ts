@@ -6,9 +6,9 @@ type Row = Record<string, unknown>
 
 // Synced collections and their columns (id first); userId is forced from the JWT, never the client body — the per-user isolation boundary.
 const TABLES: Record<string, string[]> = {
-  sessions: ['id', 'userId', 'date', 'title', 'plannedDay', 'createdAt', 'updatedAt', 'deletedAt'],
+  sessions: ['id', 'userId', 'date', 'title', 'plannedDay', 'finishedAt', 'createdAt', 'updatedAt', 'deletedAt'],
   setlogs: ['id', 'userId', 'sessionId', 'exerciseId', 'exerciseName', 'weightKg', 'reps', 'order', 'rir', 'note', 'createdAt', 'updatedAt', 'deletedAt'],
-  plans: ['id', 'userId', 'name', 'days', 'sourceShareCode', 'scheme', 'createdAt', 'updatedAt', 'deletedAt'],
+  plans: ['id', 'userId', 'name', 'days', 'sourceShareCode', 'scheme', 'enrolledAt', 'schedule', 'createdAt', 'updatedAt', 'deletedAt'],
   exclusions: ['id', 'userId', 'kind', 'value', 'label', 'until', 'createdAt', 'updatedAt', 'deletedAt'],
   goals: ['id', 'userId', 'type', 'title', 'emphasis', 'targetMetric', 'targetExerciseId', 'targetValue', 'baselineValue', 'deadline', 'status', 'outcome', 'createdAt', 'updatedAt', 'deletedAt'],
   bodymetrics: ['id', 'userId', 'date', 'weightKg', 'measurements', 'note', 'createdAt', 'updatedAt', 'deletedAt'],

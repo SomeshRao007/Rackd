@@ -3,6 +3,7 @@ import { getOrCreateTodaySession, lastSetFor } from './actions'
 import { getPrefs, equipmentAvailable } from '../lib/prefs'
 import { activeExclusions } from './exclusions'
 import type { Plan, PlanDay, PlannedDay, PlannedPick, Exercise, SchemeId } from './schema'
+import type { PlanSchedule } from '../lib/schedule'
 
 const now = () => new Date().toISOString()
 
@@ -33,6 +34,8 @@ export async function createPlan(userId: string, name: string): Promise<Plan> {
     name,
     days: '[]',
     sourceShareCode: null,
+    enrolledAt: null,
+    schedule: null,
     createdAt: ts,
     updatedAt: ts,
     deletedAt: null,
@@ -48,6 +51,30 @@ export async function updatePlan(
   const db = await getDb()
   const doc = await db.plans.findOne(id).exec()
   if (doc) await doc.patch({ ...patch, updatedAt: now() })
+}
+
+// Enroll (M8.2): one active plan at a time — clearing the others' enrolledAt keeps "the enrolled
+// plan" a simple findOne everywhere; each patch bumps updatedAt so the change syncs via LWW.
+export async function enrollPlan(
+  userId: string,
+  planId: string,
+  schedule: PlanSchedule,
+): Promise<void> {
+  const db = await getDb()
+  const enrolled = await db.plans
+    .find({ selector: { userId, deletedAt: null, enrolledAt: { $ne: null } } })
+    .exec()
+  for (const doc of enrolled) {
+    if (doc.id !== planId) await doc.patch({ enrolledAt: null, schedule: null, updatedAt: now() })
+  }
+  const doc = await db.plans.findOne(planId).exec()
+  if (doc) await doc.patch({ enrolledAt: now(), schedule: JSON.stringify(schedule), updatedAt: now() })
+}
+
+export async function unenrollPlan(planId: string): Promise<void> {
+  const db = await getDb()
+  const doc = await db.plans.findOne(planId).exec()
+  if (doc) await doc.patch({ enrolledAt: null, schedule: null, updatedAt: now() })
 }
 
 /** Soft-delete (tombstone, so the delete syncs). */
@@ -70,6 +97,8 @@ export async function adoptPlan(
     name: snapshot.name,
     days: typeof snapshot.days === 'string' ? snapshot.days : JSON.stringify(snapshot.days),
     sourceShareCode: snapshot.shareCode ?? null,
+    enrolledAt: null,
+    schedule: null,
     createdAt: ts,
     updatedAt: ts,
     deletedAt: null,

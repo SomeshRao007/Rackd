@@ -39,9 +39,10 @@ export const exerciseSchema: RxJsonSchema<Exercise> = exerciseSchemaLiteral
 
 // ── Session (per-user; one workout instance) ─────────────────────────────────
 // plannedDay (v1): the locked plan day, stored as a JSON string so it rides the flat-column /sync handler unchanged.
+// finishedAt (v2, M8.2): explicit "Finish workout" stamp — green calendar days + rotation advance count only finished sessions.
 const sessionSchemaLiteral = {
   title: 'session',
-  version: 1,
+  version: 2,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -50,6 +51,7 @@ const sessionSchemaLiteral = {
     date: { type: 'string', maxLength: 10 }, // YYYY-MM-DD
     title: { type: 'string' },
     plannedDay: { type: ['string', 'null'] },
+    finishedAt: { type: ['string', 'null'] },
     createdAt: { type: 'string' },
     updatedAt: { type: 'string' },
     deletedAt: { type: ['string', 'null'] },
@@ -103,9 +105,11 @@ export const setLogSchema: RxJsonSchema<SetLog> = setLogSchemaLiteral
 
 // ── Plan (per-user; named workout plan, the first freely-editable LWW record) ─
 // `days` is a JSON STRING (not nested) so the plan syncs through the flat /sync handler unchanged; sourceShareCode records share/starter provenance.
+// Enrollment (v2, M8.2): enrolledAt non-null = THE active plan (one at a time; enrollPlan clears others);
+// schedule is a JSON string { start: 'YYYY-MM-DD', weekdays: number[] } — weekdays are Date.getDay() 0–6.
 const planSchemaLiteral = {
   title: 'plan',
-  version: 1,
+  version: 2,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -115,6 +119,8 @@ const planSchemaLiteral = {
     days: { type: 'string' },
     sourceShareCode: { type: ['string', 'null'] },
     scheme: { type: ['string', 'null'] }, // per-plan progression scheme (M5); null = double default
+    enrolledAt: { type: ['string', 'null'] },
+    schedule: { type: ['string', 'null'] },
     createdAt: { type: 'string' },
     updatedAt: { type: 'string' },
     deletedAt: { type: ['string', 'null'] },

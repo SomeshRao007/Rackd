@@ -29,6 +29,13 @@ export async function getOrCreateTodaySession(userId: string): Promise<Session> 
   return doc.toJSON() as Session
 }
 
+/** Stamp the session finished (M8.2) — the session stays open, more sets can still be logged. */
+export async function finishSession(sessionId: string): Promise<void> {
+  const db = await getDb()
+  const doc = await db.sessions.findOne(sessionId).exec()
+  if (doc) await doc.patch({ finishedAt: now(), updatedAt: now() })
+}
+
 // Append a logged set (append-only); `order` is its position within the session.
 export async function logSet(input: {
   userId: string

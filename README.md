@@ -59,6 +59,14 @@ session. That part isn't built yet (see [Roadmap](#roadmap)).
   muscles worked). Catalog expanded to **2,027 exercises** (merged free-exercise-db base set with ExerciseDB v1 dataset via normalized dedup).
   Ad-hoc logging now works from Today via "Freestyle" session creation (empty-state prompt, "+ Add exercise" button) — no need for a separate Log tab.
   Navigation is now 4 tabs: Today / Plans / Progress / History.
+- **M8.2: Calendar & plan enrollment** — Plans can now be *enrolled* (one active at a time) with a start date and chosen training weekdays
+  (Mon–Sun chips); plan days rotate across the selected weekdays, self-healing over missed sessions. The enrolled plan shows an ENROLLED badge and a "Trains Mon · Thu"-style
+  summary, with an Unenroll action. On Today, a new CalendarStrip component displays a horizontal month-view strip (today highlighted amber, finished workouts green,
+  scheduled training days with an amber dot) plus a button to open a full-month modal with ‹ › navigation and legend. A "Current plan" card shows the next few scheduled days
+  and a "Start {day} workout" button on training days; rest days show "Rest day — next up: …". Sessions now have an explicit "Finish workout" button that stamps `finishedAt`;
+  the session stays open for logging extra sets. Green calendar days and rotation advancement count only finished workouts. Data model: `plans` v1→v2 (nullable `enrolledAt`,
+  `schedule` JSON), `sessions` v1→v2 (nullable `finishedAt`); new migration `0010_enroll_finish.sql`. New pure-logic module `src/lib/schedule.ts` handles parseSchedule, nextUpIndex,
+  forecast, and weekday math.
 
 **Not built yet:** recommendations, progress photos (deferred). See [Roadmap](#roadmap).
 
@@ -83,8 +91,8 @@ Not deployed anywhere yet — runs locally for now.
 ```
 Browser (PWA, React + Vite)
   ├─ RxDB + Dexie (IndexedDB)   — local-first store, works offline
-  │   ├─ sessions + setlogs    — append-only log of lifts (M5: +rir, +note)
-  │   ├─ plans                 — user's own workout plans (M3, M5: +scheme)
+  │   ├─ sessions + setlogs    — append-only log of lifts (M5: +rir, +note; M8.2: +finishedAt)
+  │   ├─ plans                 — user's own workout plans (M3, M5: +scheme; M8.2: +enrolledAt, +schedule)
   │   ├─ exclusions            — temporary/permanent movement exclusions (M4)
   │   ├─ goals                 — weight-loss/strength/hypertrophy goals (M6)
   │   ├─ bodymetrics           — weight + measurements log (M6)
@@ -104,9 +112,9 @@ Cloudflare Pages Functions
   ├─ /share/[code]    — fetch a shared plan snapshot (M3)
   └─ /push/subscribe  — store a Web Push subscription (M7; delivery deploy-gated)
         ▼
-D1 (SQLite) — per-user rows: sessions (with nullable plannedDay), setlogs (M5: +rir, +note),
-              plans (M3, M5: +scheme), exclusions (M4), goals (M6), bodymetrics (M6), readiness (M7),
-              customexercises (M8)
+D1 (SQLite) — per-user rows: sessions (M5: +rir, +note; M8.2: +finishedAt), setlogs (M5: +rir, +note),
+              plans (M3, M5: +scheme; M8.2: +enrolledAt, +schedule), exclusions (M4), goals (M6), bodymetrics (M6),
+              readiness (M7), customexercises (M8)
             — cross-user immutable rows: shared_plans (M3)
             — server-only rows: push_subscriptions (M7)
             ↕ pull restores the same data on a new device
@@ -131,7 +139,7 @@ npm run dev            # → http://localhost:5173
 
 ```bash
 cp .dev.vars.example .dev.vars        # set JWT_SECRET; Google keys optional, see below
-npx wrangler d1 migrations apply workout-db --local   # creates local D1 tables (M1-M8 migrations)
+npx wrangler d1 migrations apply workout-db --local   # creates local D1 tables (M1-M8.2 migrations)
 npm run seed                           # merges free-exercise-db + ExerciseDB v1 into public/catalog/exercises.v1.json
 npm run seed:plans                     # generates starter plans into public/catalog/
 npm run seed:bodymap                   # pulls anatomical body-map SVG paths (M8)
@@ -150,7 +158,7 @@ Never set it in production.
 **Tests:**
 ```bash
 npm run smoke   # RxDB schema sanity check (9 collections including M8 customexercises)
-npm run test    # 11 suites: sync replication, rotation, generation, progression (M5), volume + goals (M6), readiness + consistency + PR + gamification (M7), custom-exercise classification (M8), lifting math
+npm run test    # 12 suites: sync replication, rotation, generation, progression (M5), volume + goals (M6), readiness + consistency + PR + gamification (M7), custom-exercise classification (M8), schedule + enrollment logic (M8.2), lifting math
 ```
 
 ## Using the app
@@ -163,8 +171,11 @@ npm run test    # 11 suites: sync replication, rotation, generation, progression
    duration, and a maximum sets-per-exercise ceiling) calibrates how many sets fit the Start-day time budget. The max-sets input (default 6)
    is adjustable to limit how many sets the budget algorithm assigns to any single exercise. Also manage temporary or permanent exclusions
    (rest a muscle group or specific exercise for a preset duration or forever) — useful for injury recovery or focusing on other body parts.
-3. **Plans** (M3, M5, M8) — Build your own workout plan or adopt a starter plan. A plan defines "days"
+3. **Plans** (M3, M5, M8.2) — Build your own workout plan or adopt a starter plan. A plan defines "days"
    (e.g., Push, Pull, Legs), each with "slots" (e.g., Horizontal Push). Each slot holds an exercise pool.
+   *Enroll* a plan (M8.2) by selecting a start date and your preferred training weekdays (Mon–Sun chips); the app will rotate plan days
+   across your chosen weekdays. Enrolled plans show an ENROLLED badge and display "Trains Mon · Thu"-style summaries with an Unenroll action.
+   An enrolled plan's days self-heal: if you skip a session, the rotation continues from the last finished workout, so the sequence stays consistent.
    When you start a day, the app picks the least-recently-trained exercise from each pool,
    filtering out excluded exercises and unavailable equipment. You can preview and swap picks
    before locking the day. Share your plans with other users via a stable share code; they can
@@ -192,22 +203,23 @@ npm run test    # 11 suites: sync replication, rotation, generation, progression
    *Body*: log your current weight and any measurements (waist, chest, arms, thighs, hips); a hand-rolled weight-trend sparkline
    visualizes your progress over time. *Recovery* (M7): your readiness trend, current training day streak (and best, forgiving up to 2 rest days
    between sessions), a nudge if you've been away long enough to lose progress, and goal-tied badges you've earned.
-6. **Today** (M8) — When a plan day is locked, each planned exercise appears as an inline mini-logger.
-   For each exercise: see suggested weight + reps (from the plan's progression scheme), warm-up sets
-   (steps down from the last working weight), and a plate calculator (barbell plate stack per side;
-   edit the bar weight in the calculator if your bar is not 20 kg). A labeled "Info" button on each exercise opens its detail page
-   with instructions, worked muscles, and cross-session records. Tap a row to expand it, log weight × reps per set.
-   Optionally log RIR (reps in reserve, 0–5 scale) and a per-set note for each set; these feed the progression
-   engine and are shown in history. Mid-workout actions: swap to a different exercise (drawing from your plan's pool),
-   add a new exercise from the catalog (an "+ Add exercise" button at the bottom), or temporarily exclude an exercise
-   or muscle group to rest. When you exclude an exercise ("Rest this lift" or "Rest {muscle}"), an inline confirmation appears
-   explaining the exclusion takes effect on the next generated day (not the current session) and can be ended anytime in Settings.
-   Ad-hoc exercises added mid-session can be saved to the plan so they recur next time.
-   Rows turn green once you've logged the target number of sets. Any lifts logged outside the plan appear under "Also logged",
-   each also with an "Info" button to view details. Stats show today's total set count, lift count, and volume. A motivation strip (M7) sits
-   at the top: your current day streak, a daily quote, a celebration when you set a personal record, and a short muscle micro-lesson for the day.
-   To log lifting without a plan, use the empty-state "Start logging" button or the "+ Add exercise" action to create a "Freestyle"
-   session and log on-the-fly. Last session's numbers for each exercise are pre-filled.
+6. **Today** (M8, M8.2) — At the top, a CalendarStrip (M8.2) shows a horizontal month view with day chips: today highlighted in amber,
+   days with finished workouts in green, and scheduled training days marked with an amber dot. A button opens a full-month calendar modal
+   with ‹ › month navigation and a legend. Below that, if you have an enrolled plan, a "Current plan" card (M8.2) displays the next few
+   scheduled days as chips ("Thu 9 · Push") and a "Start {day} workout" button on training days; on rest days it shows "Rest day — next up: …".
+   When a plan day is locked, each planned exercise appears as an inline mini-logger. For each exercise: see suggested weight + reps (from the plan's progression scheme),
+   warm-up sets (steps down from the last working weight), and a plate calculator (barbell plate stack per side; edit the bar weight in the calculator if your bar is not 20 kg).
+   A labeled "Info" button on each exercise opens its detail page with instructions, worked muscles, and cross-session records. Tap a row to expand it, log weight × reps per set.
+   Optionally log RIR (reps in reserve, 0–5 scale) and a per-set note for each set; these feed the progression engine and are shown in history.
+   At the bottom of the workout, an explicit "Finish workout" button (M8.2) stamps the session as complete (`finishedAt`); the session stays open for logging extra sets after finishing.
+   Green calendar days and plan-rotation advancement count only finished workouts. Mid-workout actions: swap to a different exercise (drawing from your plan's pool),
+   add a new exercise from the catalog (an "+ Add exercise" button at the bottom), or temporarily exclude an exercise or muscle group to rest. When you exclude an exercise
+   ("Rest this lift" or "Rest {muscle}"), an inline confirmation appears explaining the exclusion takes effect on the next generated day (not the current session) and can be ended anytime
+   in Settings. Ad-hoc exercises added mid-session can be saved to the plan so they recur next time. Rows turn green once you've logged the target number of sets.
+   Any lifts logged outside the plan appear under "Also logged", each also with an "Info" button to view details. Stats show today's total set count, lift count, and volume.
+   A motivation strip (M7) sits at the top: your current day streak, a daily quote, a celebration when you set a personal record, and a short muscle micro-lesson for the day.
+   To log lifting without a plan, use the empty-state "Start logging" button or the "+ Add exercise" action to create a "Freestyle" session and log on-the-fly.
+   Last session's numbers for each exercise are pre-filled.
 7. **History** — Past sessions.
 8. Toggle kg/lb anytime from the header. Export all your data as JSON from the same header.
 
@@ -225,7 +237,7 @@ In rough order, each one shippable on its own:
 | ✓ Progression & intensity (M5) | Per-plan progression schemes (double & linear), automatic weight + reps suggestion, RIR logging, 1RM estimation, break re-entry, deload detection. |
 | ✓ Goals & body tracking (M6) | Weight-loss, strength, and hypertrophy goals with progress bars and adaptive suggestions. Body weight + measurements tracking with trend sparkline. Volume-by-muscle-group dashboard over 7/14/30/365-day windows with drill-down and body-map overlay. |
 | ✓ Recovery, consistency & motivation (M7) | Daily recovery-readiness check-in that eases suggested load on run-down days; weekly training streaks + "cost of falling off" nudges; personal-record detection & celebration; goal-tied badges + per-session muscle micro-lessons; native Web Push reminder scaffold (delivery deploy-gated). |
-| ✓ Exercise intelligence & body-map (M8) | Anatomical male/female muscle map (front/back, from MuscleMap) appearing on exercise cards and the Progress heatmap. Custom exercises with smart auto-classification: name → muscle tagging via keyword matching. Searchable exercise library with detail cards showing worked muscles, instructions, records, and YouTube links. |
+| ✓ Exercise intelligence & body-map (M8–M8.2) | Anatomical male/female muscle map (front/back, from MuscleMap) appearing on exercise cards and the Progress heatmap. Custom exercises with smart auto-classification: name → muscle tagging via keyword matching. Searchable exercise library with detail cards showing worked muscles, instructions, records, and YouTube links (M8). Plan enrollment with rotating schedules: pick a start date and training weekdays, plan days auto-rotate with self-healing over missed sessions (M8.2). Calendar strip on Today showing month view with workout history and upcoming scheduled days; explicit "Finish workout" button to mark sessions complete and advance rotation (M8.2). |
 | Optional AI layer | Bring your own AI key to improve plans/recommendations. Never required — the app works fully without it. |
 
 Nutrition tracking, wearable integrations, and AI form-checking are under consideration but

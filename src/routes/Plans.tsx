@@ -3,7 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import type { Plan, PlanDay, Exercise, CustomExercise } from '../db/schema'
-import { createPlan, deletePlan, adoptPlan, fetchSharedPlan } from '../db/plans'
+import { createPlan, deletePlan, adoptPlan, fetchSharedPlan, enrollPlan, unenrollPlan } from '../db/plans'
+import { parseSchedule, type PlanSchedule } from '../lib/schedule'
 import { customToExercise } from '../db/customExercises'
 import { CreateCustomExercise } from '../components/CreateCustomExercise'
 import { GROUP_IDS, GROUP_LABELS, groupOf, type MuscleGroupId } from '../lib/muscles'
@@ -35,6 +36,7 @@ export function Plans() {
   const setView = (v: 'plans' | 'exercises') =>
     setSearchParams(v === 'exercises' ? { tab: 'exercises' } : {}, { replace: true })
   const [browsing, setBrowsing] = useState(false)
+  const [enrolling, setEnrolling] = useState<Plan | null>(null)
   const [starters, setStarters] = useState<Starter[]>([])
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -110,11 +112,20 @@ export function Plans() {
         <ul className="mt-5 space-y-3">
           {plans.map((p) => {
             const days = parseDays(p)
+            const isEnrolled = p.enrolledAt != null
             return (
-              <li key={p.id} className="rounded-2xl border border-steel-800 bg-steel-900 p-4">
+              <li
+                key={p.id}
+                className={`rounded-2xl border p-4 ${isEnrolled ? 'border-amber bg-amber/5' : 'border-steel-800 bg-steel-900'}`}
+              >
                 <div className="flex items-center gap-2">
-                  <Link to={`/app/plans/${p.id}`} className="flex-1 font-display text-lg font-bold hover:text-amber">
+                  <Link to={`/app/plans/${p.id}`} className="min-w-0 flex-1 font-display text-lg font-bold hover:text-amber">
                     {p.name || 'Untitled plan'}
+                    {isEnrolled && (
+                      <span className="ml-2 inline-block translate-y-[-2px] rounded-full bg-amber px-2 py-0.5 align-middle text-[0.6rem] font-black uppercase tracking-wide text-ink">
+                        Enrolled
+                      </span>
+                    )}
                   </Link>
                   <Link
                     to={`/app/plans/${p.id}`}
@@ -151,6 +162,28 @@ export function Plans() {
                       </button>
                     ))}
                   </div>
+                )}
+                {isEnrolled ? (
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-fog">{scheduleSummary(p.schedule)}</p>
+                    <button
+                      type="button"
+                      onClick={() => void unenrollPlan(p.id)}
+                      className="text-xs font-semibold text-fog underline-offset-2 transition-colors hover:text-chalk hover:underline"
+                    >
+                      Unenroll
+                    </button>
+                  </div>
+                ) : (
+                  days.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setEnrolling(p)}
+                      className="mt-3 w-full rounded-xl border border-amber/60 py-2 text-sm font-black uppercase tracking-wide text-amber transition-colors hover:bg-amber hover:text-ink"
+                    >
+                      Enroll
+                    </button>
+                  )
                 )}
               </li>
             )
@@ -201,7 +234,110 @@ export function Plans() {
       {browsing && (
         <StarterBrowser starters={starters} onAdopt={onAdoptStarter} onClose={() => setBrowsing(false)} />
       )}
+      {enrolling && (
+        <EnrollDialog
+          plan={enrolling}
+          onConfirm={async (schedule) => {
+            await enrollPlan(userId, enrolling.id, schedule)
+            setEnrolling(null)
+          }}
+          onClose={() => setEnrolling(null)}
+        />
+      )}
     </section>
+  )
+}
+
+// Mon-first weekday chips; values are Date.getDay() 0–6.
+const WEEKDAYS = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 0, label: 'Sun' },
+]
+
+function scheduleSummary(raw: string | null | undefined): string {
+  const s = parseSchedule(raw)
+  if (!s) return ''
+  const names = WEEKDAYS.filter((w) => s.weekdays.includes(w.value)).map((w) => w.label)
+  return `Trains ${names.join(' · ')}`
+}
+
+// Enrollment (M8.2): start date + training weekdays; plan days rotate across those dates on Today.
+function EnrollDialog({
+  plan,
+  onConfirm,
+  onClose,
+}: {
+  plan: Plan
+  onConfirm: (schedule: PlanSchedule) => Promise<void>
+  onClose: () => void
+}) {
+  const [start, setStart] = useState(() => new Date().toISOString().slice(0, 10))
+  const [picked, setPicked] = useState<number[]>([])
+  const toggle = (v: number) =>
+    setPicked((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]))
+
+  return (
+    <div className="fixed inset-0 z-30 grid place-items-center bg-ink/95 p-4 backdrop-blur">
+      <div className="w-full max-w-sm rounded-2xl border border-steel-800 bg-steel-900 p-5">
+        <h2 className="font-display text-xl font-black tracking-tight">Enroll in {plan.name || 'this plan'}</h2>
+        <p className="mt-1 text-sm text-fog">
+          Pick your training days — the plan's days rotate across them, and Today shows what's up next.
+        </p>
+
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-fog">
+          Starting
+          <input
+            type="date"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            className="mt-1.5 w-full rounded-lg border border-steel-700 bg-steel-950 px-3 py-2 text-base text-chalk [color-scheme:dark] focus-visible:border-amber focus-visible:outline-none"
+          />
+        </label>
+
+        <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-fog">Training days</p>
+        <div className="mt-1.5 grid grid-cols-7 gap-1">
+          {WEEKDAYS.map((w) => {
+            const active = picked.includes(w.value)
+            return (
+              <button
+                key={w.value}
+                type="button"
+                onClick={() => toggle(w.value)}
+                aria-pressed={active}
+                className={`rounded-lg py-2 text-xs font-bold transition-colors ${
+                  active ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'
+                }`}
+              >
+                {w.label}
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-steel-700 py-3 font-display font-black uppercase tracking-wide text-chalk transition-colors hover:bg-steel-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={picked.length === 0 || !start}
+            onClick={() => void onConfirm({ start, weekdays: picked })}
+            className="rounded-xl bg-amber py-3 font-display font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright disabled:opacity-50"
+          >
+            Enroll
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 

@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
-import type { Exercise, SetLog, PlannedDay, Session, CustomExercise } from '../db/schema'
+import type { Exercise, SetLog, Plan, PlanDay, PlannedDay, Session, CustomExercise } from '../db/schema'
 import { addPickToDay, startAdHocSession } from '../db/plans'
+import { finishSession } from '../db/actions'
+import { parseSchedule, nextUpIndex, forecast, addDays } from '../lib/schedule'
 import { customToExercise } from '../db/customExercises'
 import { type Unit, useUnit, formatWeight } from '../lib/units'
 import { trainingStreak } from '../lib/consistency'
@@ -16,8 +18,24 @@ import { PlannedExerciseRow } from '../components/PlannedExerciseRow'
 import { MobilityBlock } from '../components/MobilityBlock'
 import { ExercisePicker } from '../components/ExercisePicker'
 import { ExerciseInfoLink } from '../components/ExerciseInfoLink'
+import { CalendarStrip } from '../components/CalendarStrip'
 
 const today = () => new Date().toISOString().slice(0, 10)
+const fmtDay = (iso: string, opts: Intl.DateTimeFormatOptions) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { ...opts, timeZone: 'UTC' })
+const parsePlanDays = (raw: string): PlanDay[] => {
+  try {
+    return JSON.parse(raw) as PlanDay[]
+  } catch {
+    return []
+  }
+}
+
+type Agenda = {
+  days: PlanDay[]
+  upcoming: { date: string; dayIndex: number }[]
+  todayEntry: { date: string; dayIndex: number } | null
+}
 
 export function Today() {
   const { user } = useAuth()
@@ -26,11 +44,12 @@ export function Today() {
   const date = today()
   const [adding, setAdding] = useState(false)
 
-  const todaySessions = useRxData(
-    (db) => db.sessions.find({ selector: { userId, date, deletedAt: null } }),
-    [userId, date],
+  // One reactive query feeds today's session, the calendar marks, the streak, and the agenda.
+  const sessions = useRxData<Session>(
+    (db) => db.sessions.find({ selector: { userId, deletedAt: null } }),
+    [userId],
   )
-  const session = todaySessions[0] ?? null
+  const session = useMemo(() => sessions.find((s) => s.date === date) ?? null, [sessions, date])
   const sessionId = session?.id ?? null
 
   // Add-exercise works from any state, incl. a cold start with no plan/session (replaces the Log tab):
@@ -59,6 +78,44 @@ export function Today() {
       return null
     }
   }, [session])
+
+  // Enrollment (M8.2): the single active plan and which of its days lands on which date. Rotation
+  // continues from the last FINISHED workout; today's locked day (even unfinished) counts so
+  // "next up" moves past it.
+  const enrolledPlans = useRxData<Plan>(
+    (db) => db.plans.find({ selector: { userId, deletedAt: null, enrolledAt: { $ne: null } } }),
+    [userId],
+  )
+  const enrolled = enrolledPlans[0] ?? null
+
+  const agenda = useMemo<Agenda | null>(() => {
+    if (!enrolled) return null
+    const schedule = parseSchedule(enrolled.schedule)
+    const days = parsePlanDays(enrolled.days)
+    if (!schedule || days.length === 0) return null
+    const todayLockedDayId = planned && planned.planId === enrolled.id ? planned.dayId : null
+    let lastFinished: { date: string; dayId: string } | null = null
+    for (const s of sessions) {
+      if (!s.finishedAt || !s.plannedDay) continue
+      try {
+        const pd = JSON.parse(s.plannedDay) as PlannedDay
+        if (pd.planId === enrolled.id && (!lastFinished || s.date > lastFinished.date))
+          lastFinished = { date: s.date, dayId: pd.dayId }
+      } catch {
+        // corrupt synced plannedDay — skip the row
+      }
+    }
+    const start = nextUpIndex(days.map((d) => d.id), todayLockedDayId ?? lastFinished?.dayId ?? null)
+    // 42 training days ≈ 2–3 months of amber dots for the calendar's month navigation.
+    const upcoming = forecast(days.length, schedule, start, todayLockedDayId ? addDays(date, 1) : date, 42)
+    return { days, upcoming, todayEntry: upcoming.find((u) => u.date === date) ?? null }
+  }, [enrolled, sessions, planned, date])
+
+  const doneDates = useMemo(
+    () => new Set(sessions.filter((s) => s.finishedAt).map((s) => s.date)),
+    [sessions],
+  )
+  const scheduledDates = useMemo(() => new Set(agenda?.upcoming.map((u) => u.date) ?? []), [agenda])
 
   const sets = useRxData<SetLog>(
     (db) =>
@@ -89,12 +146,15 @@ export function Today() {
   return (
     <section>
       <h1 className="font-display text-3xl font-black tracking-tight">Today</h1>
-      <p className="mt-1 text-sm text-fog">
-        {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
-        {planned && <span className="ml-2 font-bold text-amber">· {planned.label}</span>}
-      </p>
+      {planned && <p className="mt-1 text-sm font-bold text-amber">{planned.label}</p>}
 
-      <MotivationStrip userId={userId} date={date} unit={unit} lessonMuscles={lessonMuscles} />
+      <CalendarStrip today={date} doneDates={doneDates} scheduledDates={scheduledDates} />
+
+      <MotivationStrip userId={userId} date={date} unit={unit} lessonMuscles={lessonMuscles} sessions={sessions} />
+
+      {enrolled && agenda && !(planned && planned.planId === enrolled.id) && (
+        <EnrolledCard plan={enrolled} agenda={agenda} date={date} />
+      )}
 
       {planned && sessionId ? (
         <>
@@ -129,6 +189,7 @@ export function Today() {
               <LoggedGroups groups={extraGroups} unit={unit} />
             </div>
           )}
+          {session && <FinishControl session={session} />}
         </>
       ) : sets.length === 0 ? (
         <EmptyToday onStart={() => setAdding(true)} />
@@ -145,6 +206,7 @@ export function Today() {
           >
             + Add exercise
           </button>
+          {session && <FinishControl session={session} />}
         </>
       )}
 
@@ -157,6 +219,72 @@ export function Today() {
         />
       )}
     </section>
+  )
+}
+
+// Current-plan card (M8.2): the next few scheduled days ("Thu 10 · Upper") and — when today is a
+// training day — the one-tap entry into the existing StartDay flow. Hidden once today's session
+// is locked from this plan (the session UI takes over).
+function EnrolledCard({ plan, agenda, date }: { plan: Plan; agenda: Agenda; date: string }) {
+  const navigate = useNavigate()
+  const { days, upcoming, todayEntry } = agenda
+  const next = upcoming[0]
+  return (
+    <div className="mt-5 rounded-2xl border border-amber/40 bg-steel-900 p-4">
+      <p className="text-xs font-bold uppercase tracking-widest text-amber">Current plan</p>
+      <Link to={`/app/plans/${plan.id}`} className="mt-0.5 block font-display text-lg font-bold hover:text-amber">
+        {plan.name || 'Untitled plan'}
+      </Link>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {upcoming.slice(0, 3).map((u) => (
+          <span
+            key={u.date}
+            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
+              u.date === date ? 'bg-amber text-ink' : 'bg-steel-800 text-fog'
+            }`}
+          >
+            {fmtDay(u.date, { weekday: 'short', day: 'numeric' })} · {days[u.dayIndex]?.label}
+          </span>
+        ))}
+      </div>
+      {todayEntry ? (
+        <button
+          type="button"
+          onClick={() => navigate(`/app/plans/${plan.id}/start/${days[todayEntry.dayIndex].id}`)}
+          className="mt-4 w-full rounded-xl bg-amber py-3 font-display font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright"
+        >
+          Start {days[todayEntry.dayIndex]?.label} workout
+        </button>
+      ) : (
+        next && (
+          <p className="mt-3 text-sm text-fog">
+            Rest day — next up: <span className="font-bold text-chalk">{days[next.dayIndex]?.label}</span> on{' '}
+            {fmtDay(next.date, { weekday: 'long' })}
+          </p>
+        )
+      )}
+    </div>
+  )
+}
+
+// Finish stamps finishedAt but leaves the session open (M8.2) — green calendar day + rotation
+// advance count finished workouts only.
+function FinishControl({ session }: { session: Session }) {
+  if (session.finishedAt) {
+    return (
+      <div className="mt-6 rounded-xl border border-green-500/40 bg-green-500/10 px-4 py-3 text-center text-sm font-bold text-green-300">
+        ✓ Workout complete — extra sets still count.
+      </div>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void finishSession(session.id)}
+      className="mt-6 w-full rounded-xl border-2 border-green-500 py-3 font-display font-black uppercase tracking-wide text-green-400 transition-colors hover:bg-green-500 hover:text-ink"
+    >
+      Finish workout
+    </button>
   )
 }
 
@@ -220,22 +348,20 @@ function EmptyToday({ onStart }: { onStart: () => void }) {
 }
 
 // Motivation strip (M7): day streak + daily quote, today's PR celebration, and a muscle micro-lesson.
-// Loads the full session/set history reactively; renders only the pieces that have data.
+// Sessions arrive from the page-level query (M8.2 shares it with the calendar); sets load here.
 function MotivationStrip({
   userId,
   date,
   unit,
   lessonMuscles,
+  sessions,
 }: {
   userId: string
   date: string
   unit: Unit
   lessonMuscles: string[]
+  sessions: Session[]
 }) {
-  const sessions = useRxData<Session>(
-    (db) => db.sessions.find({ selector: { userId, deletedAt: null } }),
-    [userId],
-  )
   const setlogs = useRxData<SetLog>(
     (db) => db.setlogs.find({ selector: { userId, deletedAt: null } }),
     [userId],
