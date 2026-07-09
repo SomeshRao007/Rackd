@@ -42,7 +42,11 @@ async function create(): Promise<WorkoutDatabase> {
     eventReduce: true,
   })
   await db.addCollections({
-    exercises: { schema: exerciseSchema },
+    exercises: {
+      schema: exerciseSchema,
+      // v0→v1 added the nullable gifId (M8.1); existing catalog rows default to null then re-seed.
+      migrationStrategies: { 1: (doc) => ({ ...doc, gifId: null }) },
+    },
     sessions: {
       schema: sessionSchema,
       // v0→v1 added the nullable plannedDay; existing sessions default to null.
@@ -68,7 +72,7 @@ async function create(): Promise<WorkoutDatabase> {
 }
 
 // Bump together with the catalog JSON filename to push a new catalog to clients.
-const CATALOG_VERSION = 1
+const CATALOG_VERSION = 2 // v2 (M8.1): merged ExerciseDB — ~2,027 exercises + gifId
 
 /** Seed/refresh the catalog. Idempotent: re-seeds only when the version changed. */
 export async function seedCatalog(): Promise<void> {

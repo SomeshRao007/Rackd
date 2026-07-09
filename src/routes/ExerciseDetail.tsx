@@ -14,6 +14,10 @@ import { epley1RM } from '../lib/lifting'
 // /app/exercises/:id.
 type Tab = 'instructions' | 'records'
 
+// ExerciseDB animations are hotlinked (online-only) — see scripts/seed-catalog.ts. We degrade
+// gracefully: GIF → static demo image → nothing (the body-map below always renders regardless).
+const GIF_BASE = 'https://static.exercisedb.dev/media/'
+
 export function ExerciseDetail() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
@@ -52,6 +56,8 @@ export function ExerciseDetail() {
           <h1 className="font-display text-3xl font-black tracking-tight">{ex.name}</h1>
           {ex.equipment && <p className="mt-1 text-sm capitalize text-fog">{ex.equipment}</p>}
 
+          <ExerciseVisual gifId={ex.gifId ?? null} images={ex.images ?? []} name={ex.name} />
+
           <div className="mt-4">
             <BodyMap highlight={{ primary: ex.primaryMuscles, secondary: ex.secondaryMuscles }} />
           </div>
@@ -77,6 +83,39 @@ export function ExerciseDetail() {
         </>
       )}
     </section>
+  )
+}
+
+// GIF first, then the static demo image, then nothing. Advances on load error, so an offline /
+// throttled / missing animation quietly falls back instead of showing a broken image.
+function ExerciseVisual({ gifId, images, name }: { gifId: string | null; images: string[]; name: string }) {
+  const sources = useMemo(
+    () => [gifId ? { url: GIF_BASE + gifId + '.gif', animated: true } : null, ...images.map((url) => ({ url, animated: false }))]
+      .filter((x): x is { url: string; animated: boolean } => !!x),
+    [gifId, images],
+  )
+  const [i, setI] = useState(0)
+  const current = sources[i]
+  if (!current) return null
+
+  return (
+    <figure className="mt-4">
+      <div className="grid aspect-square w-full place-items-center overflow-hidden rounded-2xl bg-steel-900">
+        <img
+          key={current.url}
+          src={current.url}
+          alt={`${name} demonstration`}
+          loading="lazy"
+          onError={() => setI((n) => n + 1)}
+          className="h-full w-full object-contain"
+        />
+      </div>
+      {current.animated && (
+        <figcaption className="mt-1.5 text-right text-[0.65rem] uppercase tracking-wide text-steel-600">
+          Animation: ExerciseDB
+        </figcaption>
+      )}
+    </figure>
   )
 }
 

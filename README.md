@@ -50,11 +50,12 @@ session. That part isn't built yet (see [Roadmap](#roadmap)).
   anatomical muscle map (SVG paths vendored from MuscleMap). Sex toggle in Settings (localStorage `wa_sex`). New `customexercises`
   RxDB collection with smart auto-classification: create custom exercises by name, and the app auto-tags worked muscles via keyword
   matching. All exercises (catalog + custom) now appear in a searchable library under the Plans tab (new Plans | Exercises toggle).
-  Each exercise has a detail card (`/app/exercises/:id`) with instructions/records toggle, worked-muscle body-map, focus area,
-  equipment, how-to steps, YouTube search link, and cross-session records (heaviest, best e1RM, history). Body-map appears in two modes:
-  heatmap (Progress tab, volume by muscle group) and highlight (exercise cards, primary/secondary muscles worked). Ad-hoc logging now
-  works from Today via "Freestyle" session creation (empty-state prompt, "+ Add exercise" button) — no need for a separate Log tab.
-  Navigation is now 4 tabs: Today / Plans / Progress / History.
+  Each exercise has a detail card (`/app/exercises/:id`) with worked-muscle body-map, focus area, equipment, instructions, and cross-session
+  records (heaviest, best e1RM, history). When available, exercise details show animated **demonstration GIFs** (1,287 of 2,027 exercises,
+  hotlinked from exercisedb.dev, online-only, with fallback to static image). Body-map appears in two modes: heatmap (Progress tab, volume
+  by muscle group) and highlight (exercise cards, primary/secondary muscles worked). Catalog expanded to **2,027 exercises** (merged
+  free-exercise-db base set with ExerciseDB v1 dataset via normalized dedup). Ad-hoc logging now works from Today via "Freestyle" session
+  creation (empty-state prompt, "+ Add exercise" button) — no need for a separate Log tab. Navigation is now 4 tabs: Today / Plans / Progress / History.
 
 **Not built yet:** recommendations, progress photos (deferred). See [Roadmap](#roadmap).
 
@@ -71,7 +72,7 @@ Not deployed anywhere yet — runs locally for now.
 | Database | Cloudflare D1 (SQLite) |
 | Auth | Google OAuth + email/password, stateless JWT |
 | PWA | vite-plugin-pwa |
-| Exercise catalog | seeded from [free-exercise-db](https://github.com/yuhonas/free-exercise-db), versioned static JSON |
+| Exercise catalog | seeded from [free-exercise-db](https://github.com/yuhonas/free-exercise-db) and [ExerciseDB v1 dataset](https://github.com/hasaneyldrm/exercises-dataset), merged by normalized name, with GIF animations hotlinked from exercisedb.dev; versioned static JSON (~2.3 MB) |
 | Starter plans | seeded from scripts/seed-starter-plans.ts, static JSON |
 
 ## Architecture
@@ -117,7 +118,7 @@ last-write-wins by `updatedAt`. No CRDTs.
 
 ```bash
 npm install
-npm run seed           # pulls the exercise catalog into public/catalog/
+npm run seed           # merges free-exercise-db + ExerciseDB v1 into public/catalog/exercises.v1.json
 npm run seed:plans     # generates starter plans into public/catalog/ (M3)
 npm run seed:bodymap   # pulls anatomical body-map SVG paths (M8)
 npm run dev            # → http://localhost:5173
@@ -128,6 +129,7 @@ npm run dev            # → http://localhost:5173
 ```bash
 cp .dev.vars.example .dev.vars        # set JWT_SECRET; Google keys optional, see below
 npx wrangler d1 migrations apply workout-db --local   # creates local D1 tables (M1-M8 migrations)
+npm run seed                           # merges free-exercise-db + ExerciseDB v1 into public/catalog/exercises.v1.json
 npm run seed:plans                     # generates starter plans into public/catalog/
 npm run seed:bodymap                   # pulls anatomical body-map SVG paths (M8)
 npm run dev:api   # terminal 1 — Pages Functions + local D1 on http://localhost:8788

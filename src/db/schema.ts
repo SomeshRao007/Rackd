@@ -8,10 +8,10 @@ import {
 
 // Every per-user record carries sync metadata: id (client UUID), userId (isolation boundary), createdAt/updatedAt (ISO; lexicographic compare = LWW key), deletedAt (soft-delete tombstone, null = live).
 
-// ── Exercise (catalog, read-only; seeded from free-exercise-db) ──────────────
+// ── Exercise (catalog, read-only; seeded from free-exercise-db + ExerciseDB) ──
 const exerciseSchemaLiteral = {
   title: 'exercise',
-  version: 0,
+  version: 1, // v0→v1: added nullable gifId (M8.1 — ExerciseDB animation reference)
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -26,6 +26,8 @@ const exerciseSchemaLiteral = {
     force: { type: 'string' },
     instructions: { type: 'array', items: { type: 'string' } },
     images: { type: 'array', items: { type: 'string' } },
+    // ExerciseDB media id → animated GIF at static.exercisedb.dev/media/{gifId}.gif (hotlinked, online-only).
+    gifId: { type: ['string', 'null'] },
     source: { type: 'string' },
     license: { type: 'string' },
   },

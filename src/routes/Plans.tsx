@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import type { Plan, PlanDay, Exercise, CustomExercise } from '../db/schema'
@@ -26,7 +26,12 @@ export function Plans() {
     [userId],
   )
 
-  const [view, setView] = useState<'plans' | 'exercises'>('plans')
+  // Tab lives in the URL (?tab=exercises) so returning from an exercise detail (navigate(-1))
+  // restores the Exercises tab instead of resetting to Plans.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const view = searchParams.get('tab') === 'exercises' ? 'exercises' : 'plans'
+  const setView = (v: 'plans' | 'exercises') =>
+    setSearchParams(v === 'exercises' ? { tab: 'exercises' } : {}, { replace: true })
   const [browsing, setBrowsing] = useState(false)
   const [starters, setStarters] = useState<Starter[]>([])
   const [code, setCode] = useState('')
