@@ -35,6 +35,21 @@ export async function createCustomExercise(userId: string, input: CustomExercise
   return id
 }
 
+/** Edit an existing custom exercise in place (id/createdAt preserved; bumps updatedAt for sync). */
+export async function updateCustomExercise(id: string, input: CustomExerciseInput): Promise<void> {
+  const db = await getDb()
+  const doc = await db.customexercises.findOne(id).exec()
+  if (!doc) return
+  await doc.patch({
+    name: input.name.trim(),
+    primaryMuscles: JSON.stringify(input.primaryMuscles),
+    secondaryMuscles: JSON.stringify(input.secondaryMuscles ?? []),
+    equipment: input.equipment ?? '',
+    instructions: JSON.stringify(input.instructions ?? []),
+    updatedAt: now(),
+  })
+}
+
 /** Soft-delete (tombstone, so the delete syncs). */
 export async function deleteCustomExercise(id: string): Promise<void> {
   const db = await getDb()

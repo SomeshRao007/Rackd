@@ -1,28 +1,32 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
+import type { Exercise } from '../db/schema'
 import { MUSCLES } from '../lib/muscles'
-import { ALL_EQUIPMENT } from '../lib/prefs'
+import { usePrefs, allEquipmentTypes } from '../lib/prefs'
 import { classify } from '../lib/classify'
-import { createCustomExercise } from '../db/customExercises'
+import { createCustomExercise, updateCustomExercise } from '../db/customExercises'
 
-// M8 R1 — create a custom exercise. The name auto-classifies its muscles (classify.ts); the user
-// edits the picks, so a wrong guess is harmless. Secondary muscles are taken from the same guess.
-// Once saved it joins the Exercises library + pickers and its detail card renders the body-map free.
+// M8 R1 — create OR edit a custom exercise. The name auto-classifies its muscles (classify.ts); the
+// user edits the picks, so a wrong guess is harmless. Pass `edit` to update an existing one in place
+// (id preserved). Once saved it joins the Exercises library + pickers and renders the body-map free.
 export function CreateCustomExercise({
   initialName = '',
+  edit,
   onCreated,
   onClose,
 }: {
   initialName?: string
+  edit?: Exercise
   onCreated: (id: string) => void
   onClose: () => void
 }) {
   const { user } = useAuth()
   const userId = user?.id ?? ''
-  const [name, setName] = useState(initialName)
-  const [primary, setPrimary] = useState<string[]>(() => classify(initialName).primary)
-  const [equipment, setEquipment] = useState('body only')
+  const [name, setName] = useState(edit?.name ?? initialName)
+  const [primary, setPrimary] = useState<string[]>(() => edit?.primaryMuscles ?? classify(initialName).primary)
+  const [equipment, setEquipment] = useState(edit?.equipment || 'body only')
   const [busy, setBusy] = useState(false)
+  const equipmentTypes = allEquipmentTypes(usePrefs())
 
   const toggle = (m: string) =>
     setPrimary((p) => (p.includes(m) ? p.filter((x) => x !== m) : [...p, m]))
@@ -32,12 +36,14 @@ export function CreateCustomExercise({
   const save = async () => {
     if (!name.trim() || primary.length === 0 || busy) return
     setBusy(true)
-    const id = await createCustomExercise(userId, {
-      name,
-      primaryMuscles: primary,
-      secondaryMuscles: classify(name).secondary.filter((m) => !primary.includes(m)),
-      equipment,
-    })
+    // Keep the existing secondaries when editing; classify fresh on create.
+    const secondaryMuscles = (edit ? edit.secondaryMuscles ?? [] : classify(name).secondary).filter((m) => !primary.includes(m))
+    if (edit) {
+      await updateCustomExercise(edit.id, { name, primaryMuscles: primary, secondaryMuscles, equipment })
+      onCreated(edit.id)
+      return
+    }
+    const id = await createCustomExercise(userId, { name, primaryMuscles: primary, secondaryMuscles, equipment })
     onCreated(id)
   }
 
@@ -45,7 +51,7 @@ export function CreateCustomExercise({
     <div className="fixed inset-0 z-30 flex flex-col bg-ink/95 backdrop-blur">
       <div className="mx-auto flex h-full w-full max-w-lg flex-col px-4 pt-5">
         <div className="mb-4 flex items-center gap-3">
-          <h2 className="flex-1 font-display text-xl font-black tracking-tight">New exercise</h2>
+          <h2 className="flex-1 font-display text-xl font-black tracking-tight">{edit ? 'Edit exercise' : 'New exercise'}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -102,7 +108,7 @@ export function CreateCustomExercise({
               onChange={(e) => setEquipment(e.target.value)}
               className="mt-1.5 w-full rounded-xl border border-steel-700 bg-steel-900 px-4 py-3 text-base capitalize text-chalk focus-visible:border-amber focus-visible:outline-none"
             >
-              {ALL_EQUIPMENT.map((eq) => (
+              {equipmentTypes.map((eq) => (
                 <option key={eq} value={eq} className="capitalize">{eq}</option>
               ))}
             </select>
@@ -116,7 +122,7 @@ export function CreateCustomExercise({
             disabled={!name.trim() || primary.length === 0 || busy}
             className="w-full rounded-xl bg-amber py-3.5 font-display font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright disabled:opacity-50"
           >
-            {busy ? 'Saving…' : 'Save exercise'}
+            {busy ? 'Saving…' : edit ? 'Save changes' : 'Save exercise'}
           </button>
         </div>
       </div>

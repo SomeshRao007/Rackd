@@ -6,6 +6,8 @@ import type { Plan, PlanDay, Exercise, CustomExercise } from '../db/schema'
 import { createPlan, deletePlan, adoptPlan, fetchSharedPlan } from '../db/plans'
 import { customToExercise } from '../db/customExercises'
 import { CreateCustomExercise } from '../components/CreateCustomExercise'
+import { GROUP_IDS, GROUP_LABELS, groupOf, type MuscleGroupId } from '../lib/muscles'
+import { usePrefs } from '../lib/prefs'
 
 type Starter = { id: string; name: string; days: PlanDay[] }
 const parseDays = (p: Plan): PlanDay[] => {
@@ -210,7 +212,11 @@ function ExercisesList() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const userId = user?.id ?? ''
+  const prefs = usePrefs()
   const [query, setQuery] = useState('')
+  const [group, setGroup] = useState<MuscleGroupId | null>(null)
+  const [equip, setEquip] = useState<string | null>(null)
+  const [onlyCustom, setOnlyCustom] = useState(false)
   const [creating, setCreating] = useState(false)
 
   const exercises = useRxData<Exercise>((db) => db.exercises.find(), [])
@@ -222,11 +228,25 @@ function ExercisesList() {
   const customIds = useMemo(() => new Set(custom.map((c) => c.id)), [custom])
   const all = useMemo(() => [...custom.map(customToExercise), ...exercises], [custom, exercises])
 
+  // Equipment values actually present in the library, plus the user's custom types (Settings).
+  const equipmentOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const e of all) if (e.equipment) set.add(e.equipment)
+    for (const c of prefs.customEquipment) set.add(c)
+    return [...set].sort()
+  }, [all, prefs.customEquipment])
+
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const pool = q ? all.filter((e) => e.name.toLowerCase().includes(q)) : all
+    const pool = all.filter(
+      (e) =>
+        (!q || e.name.toLowerCase().includes(q)) &&
+        (!group || e.primaryMuscles.some((m) => groupOf(m) === group)) &&
+        (!equip || e.equipment === equip) &&
+        (!onlyCustom || customIds.has(e.id)),
+    )
     return [...pool].sort((a, b) => a.name.localeCompare(b.name))
-  }, [all, query])
+  }, [all, query, group, equip, onlyCustom, customIds])
 
   return (
     <div className="mt-4">
@@ -240,6 +260,26 @@ function ExercisesList() {
         onChange={(e) => setQuery(e.target.value)}
         className="w-full rounded-xl border border-steel-700 bg-steel-900 px-4 py-3 text-base text-chalk placeholder:text-steel-600 focus-visible:border-amber focus-visible:outline-none"
       />
+
+      {/* Filter chips: one active muscle group + one equipment type, either combined with search. */}
+      <div className="mt-3 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1" style={{ scrollbarWidth: 'none' }}>
+        <FilterChip active={onlyCustom} onClick={() => setOnlyCustom((v) => !v)}>Custom</FilterChip>
+        {GROUP_IDS.map((g) => (
+          <FilterChip key={g} active={group === g} onClick={() => setGroup(group === g ? null : g)}>
+            {GROUP_LABELS[g]}
+          </FilterChip>
+        ))}
+      </div>
+      {equipmentOptions.length > 0 && (
+        <div className="mt-2 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1" style={{ scrollbarWidth: 'none' }}>
+          {equipmentOptions.map((eq) => (
+            <FilterChip key={eq} active={equip === eq} onClick={() => setEquip(equip === eq ? null : eq)}>
+              {eq}
+            </FilterChip>
+          ))}
+        </div>
+      )}
+
       <button
         type="button"
         onClick={() => setCreating(true)}
@@ -274,6 +314,21 @@ function ExercisesList() {
         />
       )}
     </div>
+  )
+}
+
+function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${
+        active ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 

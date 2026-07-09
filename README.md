@@ -50,12 +50,15 @@ session. That part isn't built yet (see [Roadmap](#roadmap)).
   anatomical muscle map (SVG paths vendored from MuscleMap). Sex toggle in Settings (localStorage `wa_sex`). New `customexercises`
   RxDB collection with smart auto-classification: create custom exercises by name, and the app auto-tags worked muscles via keyword
   matching. All exercises (catalog + custom) now appear in a searchable library under the Plans tab (new Plans | Exercises toggle).
-  Each exercise has a detail card (`/app/exercises/:id`) with worked-muscle body-map, focus area, equipment, instructions, and cross-session
-  records (heaviest, best e1RM, history). When available, exercise details show animated **demonstration GIFs** (1,287 of 2,027 exercises,
-  hotlinked from exercisedb.dev, online-only, with fallback to static image). Body-map appears in two modes: heatmap (Progress tab, volume
-  by muscle group) and highlight (exercise cards, primary/secondary muscles worked). Catalog expanded to **2,027 exercises** (merged
-  free-exercise-db base set with ExerciseDB v1 dataset via normalized dedup). Ad-hoc logging now works from Today via "Freestyle" session
-  creation (empty-state prompt, "+ Add exercise" button) — no need for a separate Log tab. Navigation is now 4 tabs: Today / Plans / Progress / History.
+  The Exercises library is filterable by a "Custom" chip (shows only user-created exercises), muscle group (Chest/Back/Shoulders/Arms/Legs/Core), and equipment
+  (barbell/dumbbell/cable/…, including user-added custom types); any combination can be active and filters combine with text search. Each exercise has a detail card (`/app/exercises/:id`)
+  with worked-muscle body-map, focus area, equipment, instructions, and cross-session records (heaviest, best e1RM, history); custom exercises show Edit and Delete buttons so users
+  can refine or remove their lifts. When available,
+  exercise details show animated **demonstration GIFs** (1,287 of 2,027 exercises, hotlinked from exercisedb.dev, online-only, with fallback to
+  static image). Body-map appears in two modes: heatmap (Progress tab, volume by muscle group) and highlight (exercise cards, primary/secondary
+  muscles worked). Catalog expanded to **2,027 exercises** (merged free-exercise-db base set with ExerciseDB v1 dataset via normalized dedup).
+  Ad-hoc logging now works from Today via "Freestyle" session creation (empty-state prompt, "+ Add exercise" button) — no need for a separate Log tab.
+  Navigation is now 4 tabs: Today / Plans / Progress / History.
 
 **Not built yet:** recommendations, progress photos (deferred). See [Roadmap](#roadmap).
 
@@ -153,12 +156,13 @@ npm run test    # 11 suites: sync replication, rotation, generation, progression
 ## Using the app
 
 1. Sign in (email/password or Google).
-2. **Settings** (M4) — Configure your device: environment (home/gym), available equipment, and workout timing.
-   Environment and equipment filters which exercises appear when plans are resolved. Workout timing
-   (rest interval between sets, rough working-set duration, and a maximum sets-per-exercise ceiling) calibrates how many
-   sets fit the Start-day time budget. The max-sets input (default 6) is adjustable to limit how many sets the budget
-   algorithm assigns to any single exercise. Also manage temporary or permanent exclusions (rest a muscle group or specific exercise
-   for a preset duration or forever) — useful for injury recovery or focusing on other body parts.
+2. **Settings** (M4, M8) — Configure your device: environment (home/gym), available equipment, and workout timing.
+   Environment and equipment filters which exercises appear when plans are resolved. You can add your own custom equipment types
+   (e.g., "sandbag") via an input field; custom types appear as removable toggles in "Available equipment" and also show up in the
+   Exercises library filter and the custom-exercise creator's dropdown. Workout timing (rest interval between sets, rough working-set
+   duration, and a maximum sets-per-exercise ceiling) calibrates how many sets fit the Start-day time budget. The max-sets input (default 6)
+   is adjustable to limit how many sets the budget algorithm assigns to any single exercise. Also manage temporary or permanent exclusions
+   (rest a muscle group or specific exercise for a preset duration or forever) — useful for injury recovery or focusing on other body parts.
 3. **Plans** (M3, M5, M8) — Build your own workout plan or adopt a starter plan. A plan defines "days"
    (e.g., Push, Pull, Legs), each with "slots" (e.g., Horizontal Push). Each slot holds an exercise pool.
    When you start a day, the app picks the least-recently-trained exercise from each pool,
@@ -167,8 +171,10 @@ npm run test    # 11 suites: sync replication, rotation, generation, progression
    adopt a copy into their own plans. Each plan has a progression scheme (double progression or linear progression);
    the app uses it to suggest next-session weight + reps based on your history and logged intensity.
    The Plans tab also has an **Exercises** view (Plans | Exercises toggle): a searchable library of all exercises
-   (catalog + custom). Each exercise opens a detail card with worked-muscle body-map (front/back), focus area,
-   equipment, instructions, and cross-session records (heaviest, best estimated 1RM, history).
+   (catalog + custom), filterable by a "Custom" chip, muscle group (Chest/Back/Shoulders/Arms/Legs/Core), and equipment type; any filter can be active and combine with text search.
+   You can create custom exercises (a ＋ button seeding the form, auto-classifying muscles by name). Each exercise opens a detail card with worked-muscle body-map (front/back),
+   focus area, equipment, instructions, and cross-session records (heaviest, best estimated 1RM, history); custom exercises show Edit and Delete buttons for refinement or removal.
+   Returning from an exercise detail page restores the Exercises view.
 4. **Start Day** (M4, M5) — Enter a time budget (minutes). The app auto-assigns sets and target reps
    per exercise to fit the budget: reps are set by exercise role (heavy compounds = 8 reps, isolations = 12 reps,
    unknown = 10), and sets grow one at a time, prioritizing compounds first. Per-set time comes from your

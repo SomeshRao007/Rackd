@@ -6,7 +6,7 @@ import type { Exclusion } from '../db/schema'
 import { addExclusion, removeExclusion } from '../db/exclusions'
 import {
   usePrefs, setEnvironment, setEquipment, setRestSec, setWorkSec, setMaxSets,
-  ALL_EQUIPMENT, type Environment,
+  addCustomEquipment, removeCustomEquipment, ALL_EQUIPMENT, type Environment,
 } from '../lib/prefs'
 import { MUSCLES } from '../lib/muscles'
 import { useSex, setSex, type Sex } from '../lib/sex'
@@ -91,8 +91,26 @@ export function Settings() {
             </button>
           )
         })}
+        {/* Custom types carry a remove (×); built-ins can only be toggled. */}
+        {prefs.customEquipment.map((item) => {
+          const on = prefs.equipment.includes(item)
+          return (
+            <span key={item} className={`inline-flex items-center rounded-lg text-sm font-semibold capitalize transition-colors ${on ? 'bg-amber text-ink' : 'bg-steel-800 text-fog'}`}>
+              <button type="button" onClick={() => toggleEquip(item)} aria-pressed={on} className="py-2 pl-3 pr-1.5">{item}</button>
+              <button
+                type="button"
+                onClick={() => removeCustomEquipment(item)}
+                aria-label={`Remove ${item}`}
+                className={`py-2 pl-1 pr-2.5 opacity-70 hover:opacity-100 ${on ? 'text-ink' : 'text-fog hover:text-chalk'}`}
+              >
+                ×
+              </button>
+            </span>
+          )
+        })}
       </div>
-      <p className="mt-1.5 text-xs text-fog">Generation only suggests exercises you can do. Bodyweight always counts.</p>
+      <AddEquipment existing={[...ALL_EQUIPMENT, ...prefs.customEquipment]} />
+      <p className="mt-1.5 text-xs text-fog">Generation only suggests exercises you can do. Bodyweight always counts. Add your own gear if it’s not listed.</p>
 
       {/* Workout timing — calibrates the Start-day time budget */}
       <h2 className="mt-7 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Workout timing</h2>
@@ -224,6 +242,35 @@ function NumberPref({
         <span className="text-sm font-semibold text-fog">{suffix}</span>
       </span>
     </label>
+  )
+}
+
+function AddEquipment({ existing }: { existing: string[] }) {
+  const [name, setName] = useState('')
+  const norm = name.trim().toLowerCase()
+  const dupe = norm !== '' && existing.includes(norm)
+  const add = () => {
+    if (!norm || dupe) return
+    addCustomEquipment(name)
+    setName('')
+  }
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); add() }} className="mt-2 flex gap-2">
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Add equipment (e.g. sandbag)"
+        aria-label="Add custom equipment"
+        className="min-w-0 flex-1 rounded-lg border border-steel-700 bg-steel-900 px-3 py-2 text-sm text-chalk placeholder:text-steel-600 focus-visible:border-amber focus-visible:outline-none"
+      />
+      <button
+        type="submit"
+        disabled={!norm || dupe}
+        className="shrink-0 rounded-lg bg-steel-800 px-4 py-2 text-sm font-bold text-fog transition-colors hover:bg-amber hover:text-ink disabled:opacity-40 disabled:hover:bg-steel-800 disabled:hover:text-fog"
+      >
+        {dupe ? 'Added' : 'Add'}
+      </button>
+    </form>
   )
 }
 
