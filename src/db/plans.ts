@@ -55,17 +55,19 @@ export async function updatePlan(
 
 // Enroll (M8.2): one active plan at a time — clearing the others' enrolledAt keeps "the enrolled
 // plan" a simple findOne everywhere; each patch bumps updatedAt so the change syncs via LWW.
+// Note: `enrolledAt: { $ne: null }` selectors don't match under the Dexie storage (they silently
+// return nothing, so the clear-loop no-oped and left two plans enrolled). Query plainly and filter
+// enrolledAt in JS — the pattern Plans.tsx already uses reliably on the same data.
 export async function enrollPlan(
   userId: string,
   planId: string,
   schedule: PlanSchedule,
 ): Promise<void> {
   const db = await getDb()
-  const enrolled = await db.plans
-    .find({ selector: { userId, deletedAt: null, enrolledAt: { $ne: null } } })
-    .exec()
-  for (const doc of enrolled) {
-    if (doc.id !== planId) await doc.patch({ enrolledAt: null, schedule: null, updatedAt: now() })
+  const userPlans = await db.plans.find({ selector: { userId, deletedAt: null } }).exec()
+  for (const doc of userPlans) {
+    if (doc.id !== planId && doc.enrolledAt != null)
+      await doc.patch({ enrolledAt: null, schedule: null, updatedAt: now() })
   }
   const doc = await db.plans.findOne(planId).exec()
   if (doc) await doc.patch({ enrolledAt: now(), schedule: JSON.stringify(schedule), updatedAt: now() })

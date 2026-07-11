@@ -10,6 +10,7 @@ export function Landing() {
   const [dob, setDob] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   if (user) return <Navigate to="/app" replace />
@@ -37,8 +38,14 @@ export function Landing() {
       />
 
       <header className="flex items-center gap-2.5 pt-8">
-        <span className="grid size-9 place-items-center rounded-lg bg-amber font-display text-xl font-black leading-none text-ink">
-          R
+        <span className="grid size-9 place-items-center rounded-lg bg-amber text-ink">
+          <svg viewBox="0 0 24 24" className="size-5" fill="currentColor" aria-hidden>
+            <rect x="1.5" y="9.5" width="2.5" height="5" rx="0.75" />
+            <rect x="4.5" y="7.5" width="3" height="9" rx="1" />
+            <rect x="7.5" y="10.75" width="9" height="2.5" rx="1.25" />
+            <rect x="16.5" y="7.5" width="3" height="9" rx="1" />
+            <rect x="20" y="9.5" width="2.5" height="5" rx="0.75" />
+          </svg>
         </span>
         <span className="font-display text-lg font-bold tracking-tight">
           Rackd
@@ -55,9 +62,9 @@ export function Landing() {
           <span className="text-amber">Beat the last.</span>
         </h1>
         <p className="mt-5 max-w-sm text-lg text-fog">
-          A fast, no-nonsense tracker for you and your family. It remembers your
-          last weight and reps so logging takes one tap, set after set — even
-          with no signal in the gym.
+          It remembers what you lifted last time, so today&rsquo;s set is one tap.
+          No signal in the gym? Doesn&rsquo;t matter. Built for you and everyone
+          you train with.
         </p>
 
         {/* the signature: a live-looking "last set" readout — the app's whole pitch */}
@@ -113,18 +120,41 @@ export function Landing() {
             onChange={(e) => setEmail(e.target.value)}
             className="w-full rounded-xl border border-steel-700 bg-steel-900 px-4 py-3.5 text-chalk placeholder:text-fog focus-visible:outline-2 focus-visible:outline-amber"
           />
-          <input
-            type="password"
-            required
-            minLength={8}
-            autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-            placeholder={mode === 'register' ? 'Password (min 8 characters)' : 'Password'}
-            aria-label="Password"
-            aria-invalid={error ? true : undefined}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-steel-700 bg-steel-900 px-4 py-3.5 text-chalk placeholder:text-fog focus-visible:outline-2 focus-visible:outline-amber"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              required
+              minLength={8}
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+              placeholder={mode === 'register' ? 'Password (min 8 characters)' : 'Password'}
+              aria-label="Password"
+              aria-invalid={error ? true : undefined}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-xl border border-steel-700 bg-steel-900 px-4 py-3.5 pr-12 text-chalk placeholder:text-fog focus-visible:outline-2 focus-visible:outline-amber"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              className="absolute inset-y-0 right-0 grid w-12 place-items-center rounded-r-xl text-fog transition-colors hover:text-chalk focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber"
+            >
+              {showPassword ? (
+                <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a13.2 13.2 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 8 10 8a9.7 9.7 0 0 0 5.39-1.61" />
+                  <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                  <path d="m2 2 20 20" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              )}
+            </button>
+          </div>
           {error && (
             <p role="alert" className="text-sm font-medium text-red-400">
               {error}

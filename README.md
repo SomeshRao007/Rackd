@@ -240,7 +240,7 @@ npm run test    # suites: sync replication, rotation, generation, progression (M
    To log lifting without a plan, use the empty-state "Start logging" button or the "+ Add exercise" action to create a "Freestyle" session and log on-the-fly.
    Last session's numbers for each exercise are pre-filled.
 7. **History** — Past sessions.
-8. Toggle kg/lb anytime from the header. Export all your data as JSON from the same header.
+8. **Settings** also includes a "Units" section to toggle between kg and lb, and a "Backup" section to export all your data as JSON.
 
 Data lives on your device first. If you're signed in and online, it syncs to your other
 devices automatically.

@@ -5,12 +5,14 @@ import { todayISO } from '../lib/dates'
 import { useRxData } from '../db/useRxData'
 import type { Exclusion } from '../db/schema'
 import { addExclusion, removeExclusion } from '../db/exclusions'
+import { exportData } from '../db/actions'
 import {
   usePrefs, setEnvironment, setEquipment, setRestSec, setWorkSec, setMaxSets,
   addCustomEquipment, removeCustomEquipment, ALL_EQUIPMENT, type Environment,
 } from '../lib/prefs'
 import { MUSCLES } from '../lib/muscles'
 import { useSex, setSex, type Sex } from '../lib/sex'
+import { useUnit, setUnit, type Unit } from '../lib/units'
 import { pushSupported, pushConfigured, pushPermission, subscribeToPush } from '../lib/push'
 
 // Duration presets for an exclusion; null = forever.
@@ -57,6 +59,11 @@ export function Settings() {
       <h2 className="mt-6 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Body</h2>
       <BodyToggle />
       <p className="mt-1.5 text-xs text-fog">Sets the muscle-map figure shown on your Progress and exercise screens.</p>
+
+      {/* Units — weight unit shown wherever weights appear */}
+      <h2 className="mt-6 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Units</h2>
+      <UnitToggle />
+      <p className="mt-1.5 text-xs text-fog">Sets the weight unit used across logging, plans and history.</p>
 
       {/* Environment */}
       <h2 className="mt-6 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Environment</h2>
@@ -161,6 +168,20 @@ export function Settings() {
       {/* Account — personal details; edits re-mint the JWT so identity updates in place */}
       <h2 className="mt-7 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Account</h2>
       <AccountSettings />
+
+      {/* Backup — download a JSON snapshot of everything */}
+      <h2 className="mt-7 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Backup</h2>
+      <button
+        type="button"
+        onClick={() => void exportData()}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-steel-800 py-3 font-display font-black uppercase tracking-wide text-fog transition-colors hover:bg-amber hover:text-ink"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+        </svg>
+        Export data
+      </button>
+      <p className="mt-1.5 text-xs text-fog">Downloads a JSON file of your workouts, plans and settings.</p>
     </section>
   )
 }
@@ -315,6 +336,25 @@ function BodyToggle() {
           className={`flex-1 py-3 capitalize transition-colors ${sex === s ? 'bg-amber text-ink' : 'text-fog hover:text-chalk'}`}
         >
           {s}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function UnitToggle() {
+  const unit = useUnit()
+  return (
+    <div role="group" aria-label="Weight unit" className="flex overflow-hidden rounded-xl border border-steel-700 text-sm font-bold">
+      {(['kg', 'lb'] as Unit[]).map((u) => (
+        <button
+          key={u}
+          type="button"
+          onClick={() => setUnit(u)}
+          aria-pressed={unit === u}
+          className={`flex-1 py-3 uppercase transition-colors ${unit === u ? 'bg-amber text-ink' : 'text-fog hover:text-chalk'}`}
+        >
+          {u}
         </button>
       ))}
     </div>

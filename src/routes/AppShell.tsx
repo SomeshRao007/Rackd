@@ -1,10 +1,8 @@
 import { NavLink, Outlet, Link } from 'react-router-dom'
 import { useEffect } from 'react'
 import { seedCatalog } from '../db/database'
-import { exportData } from '../db/actions'
 import { startSync, stopSync } from '../db/sync'
 import { useAuth } from '../auth/AuthContext'
-import { useUnit, setUnit } from '../lib/units'
 
 // Sync only runs against a real backend (prod, or VITE_SYNC=1 under wrangler); plain `npm run dev` has no Pages Functions, so it stays off.
 const SYNC_ON = import.meta.env.PROD || import.meta.env.VITE_SYNC === '1'
@@ -18,7 +16,6 @@ const NAV = [
 
 export function AppShell() {
   const { user, token, signOut } = useAuth()
-  const unit = useUnit()
 
   useEffect(() => {
     seedCatalog()
@@ -41,39 +38,6 @@ export function AppShell() {
             {user?.name ?? 'Athlete'}
           </span>
         </div>
-
-        <div
-          role="group"
-          aria-label="Weight unit"
-          className="flex overflow-hidden rounded-full border border-steel-700 text-sm font-bold"
-        >
-          {(['kg', 'lb'] as const).map((u) => (
-            <button
-              key={u}
-              type="button"
-              onClick={() => setUnit(u)}
-              aria-pressed={unit === u}
-              className={`px-3 py-1.5 transition-colors ${
-                unit === u
-                  ? 'bg-amber text-ink'
-                  : 'text-fog hover:text-chalk'
-              }`}
-            >
-              {u}
-            </button>
-          ))}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => exportData()}
-          aria-label="Export data"
-          className="grid size-9 place-items-center rounded-lg text-fog transition-colors hover:bg-steel-800 hover:text-chalk focus-visible:outline-2 focus-visible:outline-amber"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-          </svg>
-        </button>
 
         <Link
           to="/app/settings"
@@ -136,9 +100,12 @@ export function AppShell() {
 
 function Mark() {
   return (
-    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-amber font-display text-lg font-black leading-none text-ink">
-      R
-    </span>
+    <img
+      src="/favicon.svg"
+      alt=""
+      aria-hidden="true"
+      className="size-8 shrink-0"
+    />
   )
 }
 

@@ -8,7 +8,7 @@ import { parseSchedule, type PlanSchedule } from '../lib/schedule'
 import { customToExercise } from '../db/customExercises'
 import { CreateCustomExercise } from '../components/CreateCustomExercise'
 import { ExerciseFilters } from '../components/ExerciseFilters'
-import { filterExercises, equipmentOptionsOf, EMPTY_FILTER, type ExerciseFilter } from '../lib/exerciseFilter'
+import { filterExercises, equipmentOptionsOf, type ExerciseFilter } from '../lib/exerciseFilter'
 import { usePrefs } from '../lib/prefs'
 
 type StarterGoal = 'muscle-growth' | 'stay-active' | 'weight-loss'
@@ -38,11 +38,20 @@ export function Plans() {
   )
 
   // Tab lives in the URL (?tab=exercises) so returning from an exercise detail (navigate(-1))
-  // restores the Exercises tab instead of resetting to Plans.
+  // restores the Exercises tab instead of resetting to Plans. Toggle only the `tab` key so the
+  // Exercises filter params (also in the URL) survive a tab switch.
   const [searchParams, setSearchParams] = useSearchParams()
   const view = searchParams.get('tab') === 'exercises' ? 'exercises' : 'plans'
   const setView = (v: 'plans' | 'exercises') =>
-    setSearchParams(v === 'exercises' ? { tab: 'exercises' } : {}, { replace: true })
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (v === 'exercises') next.set('tab', 'exercises')
+        else next.delete('tab')
+        return next
+      },
+      { replace: true },
+    )
   const [browsing, setBrowsing] = useState(false)
   const [enrolling, setEnrolling] = useState<Plan | null>(null)
   const [starters, setStarters] = useState<Starter[]>([])
@@ -357,8 +366,36 @@ function ExercisesList() {
   const { user } = useAuth()
   const userId = user?.id ?? ''
   const prefs = usePrefs()
-  const [filter, setFilterState] = useState<ExerciseFilter>(EMPTY_FILTER)
-  const setFilter = (patch: Partial<ExerciseFilter>) => setFilterState((f) => ({ ...f, ...patch }))
+  // Filters live in the URL (one param each) so opening an exercise and coming back — navigate(-1),
+  // which restores the full previous URL — brings the filters back, just like the tab. Writes are
+  // `replace: true` so per-keystroke edits don't flood the history stack, and preserve `tab`.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filter = useMemo<ExerciseFilter>(
+    () => ({
+      query: searchParams.get('q') ?? '',
+      group: (searchParams.get('group') as ExerciseFilter['group']) || null,
+      equip: searchParams.get('equip') || null,
+      pattern: (searchParams.get('pattern') as ExerciseFilter['pattern']) || null,
+      onlyCustom: searchParams.get('custom') === '1',
+    }),
+    [searchParams],
+  )
+  const setFilter = (patch: Partial<ExerciseFilter>) => {
+    const next = { ...filter, ...patch }
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev)
+        const put = (k: string, v: string | null) => (v ? sp.set(k, v) : sp.delete(k))
+        put('q', next.query || null)
+        put('group', next.group)
+        put('equip', next.equip)
+        put('pattern', next.pattern)
+        put('custom', next.onlyCustom ? '1' : null)
+        return sp
+      },
+      { replace: true },
+    )
+  }
   const [creating, setCreating] = useState(false)
 
   const exercises = useRxData<Exercise>((db) => db.exercises.find(), [])

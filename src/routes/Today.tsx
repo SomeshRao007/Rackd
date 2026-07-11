@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import type { Exercise, SetLog, Plan, PlanDay, PlannedDay, Session, CustomExercise } from '../db/schema'
-import { addPickToDay, startAdHocSession } from '../db/plans'
+import { addPickToDay, startAdHocSession, unenrollPlan } from '../db/plans'
 import { finishSession } from '../db/actions'
 import { parseSchedule, nextUpIndex, forecast, addDays } from '../lib/schedule'
 import { customToExercise } from '../db/customExercises'
@@ -85,11 +85,28 @@ export function Today() {
   // Enrollment (M8.2): the single active plan and which of its days lands on which date. Rotation
   // continues from the last FINISHED workout; today's locked day (even unfinished) counts so
   // "next up" moves past it.
-  const enrolledPlans = useRxData<Plan>(
-    (db) => db.plans.find({ selector: { userId, deletedAt: null, enrolledAt: { $ne: null } } }),
+  // `enrolledAt: { $ne: null }` selectors don't match under the Dexie storage, so query plainly and
+  // filter in JS (like Plans.tsx). Pick the most-recently-enrolled so a stale prior enrollment that
+  // a broken clear-loop left behind can't win — and self-heal that stale row below.
+  const userPlans = useRxData<Plan>(
+    (db) => db.plans.find({ selector: { userId, deletedAt: null } }),
     [userId],
   )
-  const enrolled = enrolledPlans[0] ?? null
+  const activePlans = useMemo(
+    () =>
+      userPlans
+        .filter((p) => p.enrolledAt != null)
+        .sort((a, b) => (b.enrolledAt ?? '').localeCompare(a.enrolledAt ?? '')),
+    [userPlans],
+  )
+  const enrolled = activePlans[0] ?? null
+
+  // Self-heal: enforce the "one active plan" invariant if an earlier clear-loop bug left extras
+  // enrolled. Unenroll all but the most recent so Plans stops showing two "Enrolled" badges.
+  useEffect(() => {
+    if (activePlans.length > 1)
+      for (const p of activePlans.slice(1)) void unenrollPlan(p.id)
+  }, [activePlans])
 
   const agenda = useMemo<Agenda | null>(() => {
     if (!enrolled) return null

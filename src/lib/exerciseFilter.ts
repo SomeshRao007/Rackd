@@ -24,11 +24,11 @@ const METABOLIC_CATEGORIES = new Set(['plyometrics', 'cardio'])
 // blank (fall back to the secondary-muscle count: multi-joint → power, single-joint → pump).
 // Stretches stay untagged (they're mobility, not a training style).
 function styleOf(e: Exercise): 'power' | 'pump' | 'metabolic' | null {
-  if (METABOLIC_CATEGORIES.has(e.category)) return 'metabolic'
+  if (METABOLIC_CATEGORIES.has(e.category ?? '')) return 'metabolic'
   if (e.category === 'stretching') return null
   const compound =
     e.mechanic === 'compound' ||
-    POWER_CATEGORIES.has(e.category) ||
+    POWER_CATEGORIES.has(e.category ?? '') ||
     (e.mechanic !== 'isolation' && (e.secondaryMuscles?.length ?? 0) >= 2)
   return compound ? 'power' : 'pump'
 }
