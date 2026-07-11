@@ -11,7 +11,13 @@ const utc = (iso: string) => new Date(`${iso}T00:00:00Z`)
 const monthLabel = (y: number, m0: number) =>
   new Date(Date.UTC(y, m0, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })
 
-type Marks = { today: string; doneDates: Set<string>; scheduledDates?: Set<string> }
+type Marks = {
+  today: string
+  doneDates: Set<string>
+  scheduledDates?: Set<string>
+  // date → enrolled plan-day label ("Upper", "Metabolic Burst"); shown in the full-month grid (M8.3).
+  scheduledLabels?: Map<string, string>
+}
 
 // Every case carries exactly one 1px border so all cells share the same box height; today-ness is an
 // amber border, done-ness a green fill (their combination = amber border + green fill). No outset ring.
@@ -120,10 +126,17 @@ function MonthModal(props: Marks & { onClose: () => void }) {
           {Array.from({ length: leadBlanks }, (_, i) => <span key={`b${i}`} />)}
           {Array.from({ length: daysInMonth(month.y, month.m0) }, (_, i) => {
             const date = isoDate(month.y, month.m0, i + 1)
+            const label = !props.doneDates.has(date) ? props.scheduledLabels?.get(date) : undefined
             return (
-              <div key={date} className={`flex aspect-square flex-col items-center justify-center rounded-xl ${cellClasses(date, props)}`}>
-                <span className="nums text-sm font-bold">{i + 1}</span>
-                <span className={`size-1 rounded-full ${showDot(date, props) ? 'bg-amber' : 'bg-transparent'}`} />
+              <div key={date} className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 ${cellClasses(date, props)}`}>
+                <span className="nums text-sm font-bold leading-none">{i + 1}</span>
+                {label ? (
+                  <span className="w-full truncate text-center text-[0.5rem] font-semibold uppercase leading-none tracking-tight">
+                    {label}
+                  </span>
+                ) : (
+                  <span className={`size-1 rounded-full ${showDot(date, props) ? 'bg-amber' : 'bg-transparent'}`} />
+                )}
               </div>
             )
           })}

@@ -16,6 +16,7 @@ import { groupByExercise, totalVolumeKg, type ExerciseGroup } from '../component
 import { SetRow } from '../components/SetRow'
 import { PlannedExerciseRow } from '../components/PlannedExerciseRow'
 import { MobilityBlock } from '../components/MobilityBlock'
+import { CircuitTimer } from '../components/CircuitTimer'
 import { ExercisePicker } from '../components/ExercisePicker'
 import { ExerciseInfoLink } from '../components/ExerciseInfoLink'
 import { CalendarStrip } from '../components/CalendarStrip'
@@ -118,6 +119,11 @@ export function Today() {
     [sessions],
   )
   const scheduledDates = useMemo(() => new Set(agenda?.upcoming.map((u) => u.date) ?? []), [agenda])
+  // Date → plan-day label ("Upper", "Metabolic Burst") for the full-month calendar (M8.3).
+  const scheduledLabels = useMemo(
+    () => new Map(agenda?.upcoming.map((u) => [u.date, agenda.days[u.dayIndex]?.label ?? '']) ?? []),
+    [agenda],
+  )
 
   const sets = useRxData<SetLog>(
     (db) =>
@@ -151,7 +157,7 @@ export function Today() {
       {firstName && <p className="mt-1 text-sm text-fog">Hey, <span className="font-bold text-chalk">{firstName}</span> 👋</p>}
       {planned && <p className="mt-1 text-sm font-bold text-amber">{planned.label}</p>}
 
-      <CalendarStrip today={date} doneDates={doneDates} scheduledDates={scheduledDates} />
+      <CalendarStrip today={date} doneDates={doneDates} scheduledDates={scheduledDates} scheduledLabels={scheduledLabels} />
 
       <MotivationStrip userId={userId} date={date} unit={unit} lessonMuscles={lessonMuscles} sessions={sessions} />
 
@@ -162,30 +168,42 @@ export function Today() {
       {planned && sessionId ? (
         <>
           {sets.length > 0 && <Stats sets={sets.length} lifts={groups.length} volume={formatWeight(volumeKg, unit)} />}
-          {planned.warmup && <MobilityBlock title="Warm-up" steps={planned.warmup} nameOf={nameOf} />}
-          <ul className="mt-5 space-y-2">
-            {planned.picks.map((pick) => (
-              <PlannedExerciseRow
-                key={pick.slotId}
-                pick={pick}
-                sessionId={sessionId}
-                userId={userId}
-                scheme={planned.scheme ?? 'double'}
-                deload={planned.deload ?? false}
-                nameOf={nameOf}
-                muscleOf={muscleOf}
-                equipmentOf={equipmentOf}
-              />
-            ))}
-          </ul>
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="mt-3 w-full rounded-xl border border-dashed border-steel-700 px-4 py-3 text-sm font-semibold text-fog transition-colors hover:border-amber hover:text-amber"
-          >
-            + Add exercise
-          </button>
-          {planned.cooldown && <MobilityBlock title="Cooldown" steps={planned.cooldown} nameOf={nameOf} />}
+          {planned.mode === 'circuit' ? (
+            <CircuitTimer
+              key={planned.dayId}
+              picks={planned.picks}
+              workSec={planned.workSec}
+              restSec={planned.restSec}
+              rounds={planned.rounds}
+            />
+          ) : (
+            <>
+              {planned.warmup && <MobilityBlock title="Warm-up" steps={planned.warmup} nameOf={nameOf} />}
+              <ul className="mt-5 space-y-2">
+                {planned.picks.map((pick) => (
+                  <PlannedExerciseRow
+                    key={pick.slotId}
+                    pick={pick}
+                    sessionId={sessionId}
+                    userId={userId}
+                    scheme={planned.scheme ?? 'double'}
+                    deload={planned.deload ?? false}
+                    nameOf={nameOf}
+                    muscleOf={muscleOf}
+                    equipmentOf={equipmentOf}
+                  />
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                className="mt-3 w-full rounded-xl border border-dashed border-steel-700 px-4 py-3 text-sm font-semibold text-fog transition-colors hover:border-amber hover:text-amber"
+              >
+                + Add exercise
+              </button>
+              {planned.cooldown && <MobilityBlock title="Cooldown" steps={planned.cooldown} nameOf={nameOf} />}
+            </>
+          )}
           {extraGroups.length > 0 && (
             <div className="mt-7">
               <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-fog">Also logged</h2>

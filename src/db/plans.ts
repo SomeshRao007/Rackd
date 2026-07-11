@@ -160,12 +160,18 @@ export async function resolveDay(
       ...(unavailable ? { unavailable: true } : {}),
     })
   }
+  // Circuit days (M8.3) carry their timing so Today renders the timer instead of set loggers.
+  const circuit =
+    day.mode === 'circuit'
+      ? { mode: 'circuit' as const, workSec: day.workSec, restSec: day.restSec, rounds: day.rounds }
+      : {}
   return {
     planId: plan.id,
     dayId,
     label: day.label,
     scheme: (plan.scheme as SchemeId) ?? 'double',
     picks,
+    ...circuit,
     ...deriveMobility(day, picks, exMap),
   }
 }

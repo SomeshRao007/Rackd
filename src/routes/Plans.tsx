@@ -7,10 +7,18 @@ import { createPlan, deletePlan, adoptPlan, fetchSharedPlan, enrollPlan, unenrol
 import { parseSchedule, type PlanSchedule } from '../lib/schedule'
 import { customToExercise } from '../db/customExercises'
 import { CreateCustomExercise } from '../components/CreateCustomExercise'
-import { GROUP_IDS, GROUP_LABELS, groupOf, type MuscleGroupId } from '../lib/muscles'
+import { ExerciseFilters } from '../components/ExerciseFilters'
+import { filterExercises, equipmentOptionsOf, EMPTY_FILTER, type ExerciseFilter } from '../lib/exerciseFilter'
 import { usePrefs } from '../lib/prefs'
 
-type Starter = { id: string; name: string; days: PlanDay[] }
+type StarterGoal = 'muscle-growth' | 'stay-active' | 'weight-loss'
+type Starter = { id: string; goal: StarterGoal; name: string; description: string; days: PlanDay[] }
+const GOAL_ORDER: StarterGoal[] = ['muscle-growth', 'stay-active', 'weight-loss']
+const GOAL_LABEL: Record<StarterGoal, string> = {
+  'muscle-growth': 'Muscle growth',
+  'stay-active': 'Stay active',
+  'weight-loss': 'Weight loss',
+}
 const parseDays = (p: Plan): PlanDay[] => {
   try {
     return JSON.parse(p.days) as PlanDay[]
@@ -349,10 +357,8 @@ function ExercisesList() {
   const { user } = useAuth()
   const userId = user?.id ?? ''
   const prefs = usePrefs()
-  const [query, setQuery] = useState('')
-  const [group, setGroup] = useState<MuscleGroupId | null>(null)
-  const [equip, setEquip] = useState<string | null>(null)
-  const [onlyCustom, setOnlyCustom] = useState(false)
+  const [filter, setFilterState] = useState<ExerciseFilter>(EMPTY_FILTER)
+  const setFilter = (patch: Partial<ExerciseFilter>) => setFilterState((f) => ({ ...f, ...patch }))
   const [creating, setCreating] = useState(false)
 
   const exercises = useRxData<Exercise>((db) => db.exercises.find(), [])
@@ -363,26 +369,8 @@ function ExercisesList() {
 
   const customIds = useMemo(() => new Set(custom.map((c) => c.id)), [custom])
   const all = useMemo(() => [...custom.map(customToExercise), ...exercises], [custom, exercises])
-
-  // Equipment values actually present in the library, plus the user's custom types (Settings).
-  const equipmentOptions = useMemo(() => {
-    const set = new Set<string>()
-    for (const e of all) if (e.equipment) set.add(e.equipment)
-    for (const c of prefs.customEquipment) set.add(c)
-    return [...set].sort()
-  }, [all, prefs.customEquipment])
-
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const pool = all.filter(
-      (e) =>
-        (!q || e.name.toLowerCase().includes(q)) &&
-        (!group || e.primaryMuscles.some((m) => groupOf(m) === group)) &&
-        (!equip || e.equipment === equip) &&
-        (!onlyCustom || customIds.has(e.id)),
-    )
-    return [...pool].sort((a, b) => a.name.localeCompare(b.name))
-  }, [all, query, group, equip, onlyCustom, customIds])
+  const equipmentOptions = useMemo(() => equipmentOptionsOf(all, prefs.customEquipment), [all, prefs.customEquipment])
+  const matches = useMemo(() => filterExercises(all, filter, customIds), [all, filter, customIds])
 
   return (
     <div className="mt-4">
@@ -392,29 +380,13 @@ function ExercisesList() {
         autoComplete="off"
         aria-label="Search exercises"
         placeholder="Bench, squat, curl…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        value={filter.query}
+        onChange={(e) => setFilter({ query: e.target.value })}
         className="w-full rounded-xl border border-steel-700 bg-steel-900 px-4 py-3 text-base text-chalk placeholder:text-steel-600 focus-visible:border-amber focus-visible:outline-none"
       />
 
-      {/* Filter chips: one active muscle group + one equipment type, either combined with search. */}
-      <div className="mt-3 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1" style={{ scrollbarWidth: 'none' }}>
-        <FilterChip active={onlyCustom} onClick={() => setOnlyCustom((v) => !v)}>Custom</FilterChip>
-        {GROUP_IDS.map((g) => (
-          <FilterChip key={g} active={group === g} onClick={() => setGroup(group === g ? null : g)}>
-            {GROUP_LABELS[g]}
-          </FilterChip>
-        ))}
-      </div>
-      {equipmentOptions.length > 0 && (
-        <div className="mt-2 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1" style={{ scrollbarWidth: 'none' }}>
-          {equipmentOptions.map((eq) => (
-            <FilterChip key={eq} active={equip === eq} onClick={() => setEquip(equip === eq ? null : eq)}>
-              {eq}
-            </FilterChip>
-          ))}
-        </div>
-      )}
+      {/* Shared filter chips: one active muscle group + one equipment type + custom, combined with search. */}
+      <ExerciseFilters filter={filter} setFilter={setFilter} equipmentOptions={equipmentOptions} />
 
       <button
         type="button"
@@ -444,27 +416,12 @@ function ExercisesList() {
 
       {creating && (
         <CreateCustomExercise
-          initialName={query}
+          initialName={filter.query}
           onCreated={(id) => navigate(`/app/exercises/${encodeURIComponent(id)}`)}
           onClose={() => setCreating(false)}
         />
       )}
     </div>
-  )
-}
-
-function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${
-        active ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'
-      }`}
-    >
-      {children}
-    </button>
   )
 }
 
@@ -493,25 +450,53 @@ function StarterBrowser({
             </svg>
           </button>
         </div>
-        <ul className="flex-1 space-y-3 overflow-y-auto pb-5">
-          {starters.length === 0 && <li className="py-8 text-center text-sm text-fog">Loading…</li>}
-          {starters.map((s) => (
-            <li key={s.id} className="rounded-2xl border border-steel-800 bg-steel-900 p-4">
-              <div className="flex items-center gap-2">
-                <span className="flex-1 font-display text-lg font-bold">{s.name}</span>
-                <button
-                  type="button"
-                  onClick={() => onAdopt(s)}
-                  className="rounded-lg bg-amber px-4 py-2 text-sm font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright"
-                >
-                  Adopt
-                </button>
-              </div>
-              <p className="mt-1 text-sm text-fog">{s.days.map((d) => d.label).join(' · ')}</p>
-            </li>
-          ))}
-        </ul>
+        <div className="flex-1 space-y-6 overflow-y-auto pb-5">
+          {starters.length === 0 && <p className="py-8 text-center text-sm text-fog">Loading…</p>}
+          {GOAL_ORDER.map((g) => {
+            const group = starters.filter((s) => s.goal === g)
+            if (group.length === 0) return null
+            return (
+              <section key={g}>
+                <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-amber">{GOAL_LABEL[g]}</h3>
+                <ul className="space-y-3">
+                  {group.map((s) => (
+                    <StarterCard key={s.id} starter={s} onAdopt={onAdopt} />
+                  ))}
+                </ul>
+              </section>
+            )
+          })}
+        </div>
       </div>
     </div>
+  )
+}
+
+// One starter card: name + 2–3 line description + day labels, plus a "timed circuit" hint when the
+// plan has an interval day (M8.3).
+function StarterCard({ starter, onAdopt }: { starter: Starter; onAdopt: (s: Starter) => void }) {
+  const circuit = starter.days.find((d) => d.mode === 'circuit')
+  return (
+    <li className="rounded-2xl border border-steel-800 bg-steel-900 p-4">
+      <div className="flex items-start gap-2">
+        <span className="flex-1 font-display text-lg font-bold">{starter.name}</span>
+        <button
+          type="button"
+          onClick={() => onAdopt(starter)}
+          className="shrink-0 rounded-lg bg-amber px-4 py-2 text-sm font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright"
+        >
+          Adopt
+        </button>
+      </div>
+      <p className="mt-1.5 text-sm leading-relaxed text-fog">{starter.description}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+        <span className="text-steel-500">{starter.days.map((d) => d.label).join(' · ')}</span>
+        {circuit && (
+          <span className="nums rounded bg-amber/15 px-1.5 py-0.5 font-bold text-amber">
+            timed · {circuit.workSec}s/{circuit.restSec}s ×{circuit.rounds}
+          </span>
+        )}
+      </div>
+    </li>
   )
 }

@@ -28,6 +28,8 @@ export function StartDay() {
   const [warmup, setWarmup] = useState<MobilityStep[]>([])
   const [cooldown, setCooldown] = useState<MobilityStep[]>([])
   const [scheme, setScheme] = useState<SchemeId>('double')
+  // Circuit timing (M8.3): non-null → this is a timed circuit; lock it as one, skip the set-budget UI.
+  const [circuit, setCircuit] = useState<{ workSec?: number; restSec?: number; rounds?: number } | null>(null)
   const [deloadReason, setDeloadReason] = useState<string | null>(null)
   const [deload, setDeload] = useState(false) // never auto-applied — the user opts in
   const [loading, setLoading] = useState(true)
@@ -62,6 +64,11 @@ export function StartDay() {
         setWarmup(resolved.warmup ?? [])
         setCooldown(resolved.cooldown ?? [])
         setScheme(resolved.scheme ?? 'double')
+        setCircuit(
+          resolved.mode === 'circuit'
+            ? { workSec: resolved.workSec, restSec: resolved.restSec, rounds: resolved.rounds }
+            : null,
+        )
         setLoading(false)
       })
     return () => {
@@ -104,12 +111,13 @@ export function StartDay() {
   // ponytail: preview reps come from fitToBudget's mechanic defaults; the scheme's reps win when the logger opens. Bake suggestions in at lock time if the mismatch confuses.
   const mobMin = useMemo(() => mobilityMinutes([...warmup, ...cooldown]), [warmup, cooldown])
   const picks = useMemo(() => {
+    if (circuit) return basePicks // timed circuit: fixed stations, no set-budget fitting
     const fitted = fitToBudget(basePicks, exMap, prefs.budgetMin, mobMin, { restSec: prefs.restSec, workSec: prefs.workSec, maxSets: prefs.maxSets })
     if (!deload) return fitted
     return fitted.map((p) =>
       p.minSets != null ? { ...p, minSets: Math.max(1, Math.round(p.minSets * DELOAD_SET_FACTOR)) } : p,
     )
-  }, [basePicks, exMap, prefs.budgetMin, mobMin, prefs.restSec, prefs.workSec, prefs.maxSets, deload])
+  }, [basePicks, exMap, prefs.budgetMin, mobMin, prefs.restSec, prefs.workSec, prefs.maxSets, deload, circuit])
 
   function swap(slotId: string, exerciseId: string) {
     setBasePicks((cur) =>
@@ -132,6 +140,7 @@ export function StartDay() {
       cooldown,
       scheme,
       ...(deload ? { deload: true } : {}),
+      ...(circuit ? { mode: 'circuit' as const, ...circuit } : {}),
     })
     navigate('/app/today')
   }
@@ -167,18 +176,26 @@ export function StartDay() {
       </Link>
 
       <h1 className="font-display text-3xl font-black tracking-tight">{day.label}</h1>
-      <p className="mt-1 text-sm text-fog">
-        Proposed by least-recently-trained, filtered to your kit. Tap to swap, set a time budget, then lock it in.
-      </p>
-      <p className="mt-1 text-sm text-fog">
-        Progression: <span className="font-semibold text-chalk">{SCHEMES.find((s) => s.id === scheme)?.name}</span>{' '}
-        <Link to={`/app/plans/${plan.id}`} className="font-semibold text-amber hover:text-amber-bright">
-          Change
-        </Link>
-      </p>
+      {circuit ? (
+        <p className="mt-1 text-sm text-fog">
+          A timed circuit — <span className="font-semibold text-chalk">{circuit.rounds ?? 1} rounds · {circuit.workSec ?? 0}s work / {circuit.restSec ?? 0}s rest</span>. Tap to swap a station, then lock it in and hit play.
+        </p>
+      ) : (
+        <>
+          <p className="mt-1 text-sm text-fog">
+            Proposed by least-recently-trained, filtered to your kit. Tap to swap, set a time budget, then lock it in.
+          </p>
+          <p className="mt-1 text-sm text-fog">
+            Progression: <span className="font-semibold text-chalk">{SCHEMES.find((s) => s.id === scheme)?.name}</span>{' '}
+            <Link to={`/app/plans/${plan.id}`} className="font-semibold text-amber hover:text-amber-bright">
+              Change
+            </Link>
+          </p>
+        </>
+      )}
 
       {/* Deload suggestion (M5) — opt-in only; sets halve in the preview below, load drops in the loggers. */}
-      {deloadReason && (
+      {!circuit && deloadReason && (
         <div className="mt-4 rounded-xl border border-amber/40 bg-amber/10 px-4 py-3">
           <div className="flex items-start justify-between gap-2">
             <p className="text-sm text-chalk">
@@ -249,24 +266,26 @@ export function StartDay() {
         )}
       </section>
 
-      {/* Time budget — sets/reps auto-fit; blank = no limit (default 2×10). */}
-      <label className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-steel-800 bg-steel-900 px-4 py-3">
-        <span className="text-sm font-semibold uppercase tracking-wide text-fog">Time budget</span>
-        <span className="flex items-baseline gap-1.5">
-          <input
-            type="number"
-            inputMode="numeric"
-            min="0"
-            step="5"
-            value={prefs.budgetMin || ''}
-            onChange={(e) => setBudgetMin(Number(e.target.value) || 0)}
-            placeholder="—"
-            aria-label="Time budget in minutes"
-            className="nums w-16 bg-transparent text-right text-2xl font-black text-chalk outline-none placeholder:text-steel-600"
-          />
-          <span className="text-sm font-semibold text-fog">min</span>
-        </span>
-      </label>
+      {/* Time budget — sets/reps auto-fit; blank = no limit (default 2×10). Circuits have fixed timing. */}
+      {!circuit && (
+        <label className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-steel-800 bg-steel-900 px-4 py-3">
+          <span className="text-sm font-semibold uppercase tracking-wide text-fog">Time budget</span>
+          <span className="flex items-baseline gap-1.5">
+            <input
+              type="number"
+              inputMode="numeric"
+              min="0"
+              step="5"
+              value={prefs.budgetMin || ''}
+              onChange={(e) => setBudgetMin(Number(e.target.value) || 0)}
+              placeholder="—"
+              aria-label="Time budget in minutes"
+              className="nums w-16 bg-transparent text-right text-2xl font-black text-chalk outline-none placeholder:text-steel-600"
+            />
+            <span className="text-sm font-semibold text-fog">min</span>
+          </span>
+        </label>
+      )}
 
       {picks.length === 0 ? (
         <p className="mt-6 rounded-xl border border-dashed border-steel-700 px-4 py-8 text-center text-sm text-fog">

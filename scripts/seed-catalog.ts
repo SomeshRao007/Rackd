@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
+import { CUSTOM_EXERCISES } from './custom-exercises'
 
 // Catalog build = merge of two open sources into our canonical shape:
 //   • free-exercise-db (public domain, 873): curated step-by-step + static demo photos. Kept as-is.
@@ -165,6 +166,16 @@ for (const r of edbRaw) {
   added++
 }
 
+// ── 3. hand-authored additions (M8.3): standard conditioning/mobility moves the sources lack ──
+let custom = 0
+for (const rec of CUSTOM_EXERCISES) {
+  if (byNorm.has(normName(rec.name)) || usedIds.has(rec.id)) continue // never shadow a real source record
+  catalog.push(rec)
+  usedIds.add(rec.id)
+  byNorm.set(normName(rec.name), rec)
+  custom++
+}
+
 await mkdir(new URL('.', OUT), { recursive: true })
 await writeFile(OUT, JSON.stringify(catalog, null, 2))
 
@@ -181,4 +192,5 @@ for (const e of catalog) {
 const withGif = catalog.filter((e) => e.gifId).length
 console.log(`free-exercise-db: skipped ${feSkipped}`)
 console.log(`exercisedb: matched ${matched}, added ${added}, skipped ${edbSkipped}`)
+console.log(`custom-seed: added ${custom}`)
 console.log(`✓ catalog: ${catalog.length} exercises (${withGif} with GIF)`)

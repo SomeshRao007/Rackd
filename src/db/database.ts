@@ -78,7 +78,7 @@ async function create(): Promise<WorkoutDatabase> {
 }
 
 // Bump together with the catalog JSON filename to push a new catalog to clients.
-const CATALOG_VERSION = 2 // v2 (M8.1): merged ExerciseDB — ~2,027 exercises + gifId
+const CATALOG_VERSION = 3 // v3 (M8.3): +5 hand-authored conditioning/mobility moves (~2,032)
 
 /** Seed/refresh the catalog. Idempotent: re-seeds only when the version changed. */
 export async function seedCatalog(): Promise<void> {

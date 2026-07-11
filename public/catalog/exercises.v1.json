@@ -56033,5 +56033,133 @@
     "gifId": "bd5b860",
     "source": "exercisedb",
     "license": "ExerciseDB (media hotlinked; see attribution)"
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "compound",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Burpee",
+    "name": "Burpee",
+    "primaryMuscles": [
+      "quadriceps"
+    ],
+    "secondaryMuscles": [
+      "chest",
+      "shoulders",
+      "abdominals"
+    ],
+    "category": "plyometrics",
+    "instructions": [
+      "From standing, drop into a squat and plant both hands on the floor.",
+      "Kick your feet back into a plank and lower your chest to the floor.",
+      "Drive your feet back to your hands and explode straight up into a jump.",
+      "Land softly and immediately begin the next rep."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "compound",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Bear_Crawl",
+    "name": "Bear Crawl",
+    "primaryMuscles": [
+      "abdominals"
+    ],
+    "secondaryMuscles": [
+      "shoulders",
+      "quadriceps"
+    ],
+    "category": "plyometrics",
+    "instructions": [
+      "Start on hands and knees with knees hovering just off the floor, back flat.",
+      "Crawl forward moving the opposite hand and foot together, keeping hips low and core braced.",
+      "Keep the movement controlled and continuous for the work interval."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "compound",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "High_Knees",
+    "name": "High Knees",
+    "primaryMuscles": [
+      "quadriceps"
+    ],
+    "secondaryMuscles": [
+      "calves",
+      "abdominals"
+    ],
+    "category": "cardio",
+    "instructions": [
+      "Run in place, driving each knee up toward hip height.",
+      "Stay on the balls of your feet and pump your arms.",
+      "Keep a fast, light cadence for the full work interval."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "compound",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Sprint",
+    "name": "Sprint",
+    "primaryMuscles": [
+      "quadriceps"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "glutes",
+      "calves"
+    ],
+    "category": "cardio",
+    "instructions": [
+      "Accelerate to near-maximal effort over a short distance (or hill), driving the knees and arms.",
+      "Hold top speed for the work interval, then walk back to recover.",
+      "Keep form tall and powerful; ease off before form breaks down."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "isolation",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Scapular_Wall_Slide",
+    "name": "Scapular Wall Slide",
+    "primaryMuscles": [
+      "shoulders"
+    ],
+    "secondaryMuscles": [
+      "traps",
+      "middle back"
+    ],
+    "category": "stretching",
+    "instructions": [
+      "Stand with your back, head, and arms against a wall, elbows bent in a goalpost position.",
+      "Keeping wrists and elbows on the wall, slide your arms overhead as far as they stay in contact.",
+      "Slide back down, squeezing the shoulder blades together. Move slowly and stay tall."
+    ]
   }
 ]

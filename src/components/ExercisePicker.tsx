@@ -3,9 +3,12 @@ import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import type { Exercise, CustomExercise } from '../db/schema'
 import { customToExercise } from '../db/customExercises'
+import { usePrefs } from '../lib/prefs'
+import { filterExercises, equipmentOptionsOf, EMPTY_FILTER, type ExerciseFilter } from '../lib/exerciseFilter'
+import { ExerciseFilters } from './ExerciseFilters'
 
-/** Searchable catalog picker (same pattern as the Log screen), reused by the plan
- *  builder (add to a slot's pool) and the start-day swap. Renders as a panel. */
+/** Searchable catalog picker, reused by the plan builder (add to a slot's pool) and Today's add.
+ *  Uses the same filter stack (search + muscle group + equipment + custom) as the Exercises library. */
 export function ExercisePicker({
   title,
   exclude = [],
@@ -19,20 +22,21 @@ export function ExercisePicker({
 }) {
   const { user } = useAuth()
   const userId = user?.id ?? ''
-  const [query, setQuery] = useState('')
+  const prefs = usePrefs()
+  const [filter, setFilterState] = useState<ExerciseFilter>(EMPTY_FILTER)
+  const setFilter = (patch: Partial<ExerciseFilter>) => setFilterState((f) => ({ ...f, ...patch }))
   const exercises = useRxData<Exercise>((db) => db.exercises.find(), [])
   const custom = useRxData<CustomExercise>((db) => db.customexercises.find({ selector: { userId, deletedAt: null } }), [userId])
   const excludeKey = exclude.join('|')
 
+  const customIds = useMemo(() => new Set(custom.map((c) => c.id)), [custom])
+  const all = useMemo(() => [...custom.map(customToExercise), ...exercises], [custom, exercises])
+  const equipmentOptions = useMemo(() => equipmentOptionsOf(all, prefs.customEquipment), [all, prefs.customEquipment])
+
   const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const skip = new Set(excludeKey ? excludeKey.split('|') : [])
-    const all = [...custom.map(customToExercise), ...exercises]
-    const pool = q ? all.filter((e) => e.name.toLowerCase().includes(q)) : all
-    return [...pool]
-      .filter((e) => !skip.has(e.id))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [exercises, custom, query, excludeKey])
+    return filterExercises(all, filter, customIds).filter((e) => !skip.has(e.id))
+  }, [all, filter, customIds, excludeKey])
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-ink/95 backdrop-blur">
@@ -58,10 +62,13 @@ export function ExercisePicker({
           autoFocus
           aria-label="Search exercises"
           placeholder="Bench, squat, curl…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={filter.query}
+          onChange={(e) => setFilter({ query: e.target.value })}
           className="w-full rounded-xl border border-steel-700 bg-steel-900 px-4 py-3.5 text-base text-chalk placeholder:text-steel-600 focus-visible:border-amber focus-visible:outline-none"
         />
+
+        {/* Same filter stack as the Exercises library. */}
+        <ExerciseFilters filter={filter} setFilter={setFilter} equipmentOptions={equipmentOptions} />
 
         <ul className="mt-3 flex-1 space-y-1.5 overflow-y-auto pb-5">
           {matches.map((e) => (
