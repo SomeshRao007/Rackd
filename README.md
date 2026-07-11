@@ -214,8 +214,9 @@ npm run test    # suites: sync replication, rotation, generation, progression (M
 5. **Progress** (M6, M7, M8) — Bottom-nav tab with four sections. *Muscles*: see training volume (sets + tonnage) per muscle group
    over rolling 7/14/30/365-day windows; expand each group to drill into the 17 individual muscles; an anatomical body-map
    heatmap (male/female, front/back) overlays trained areas. *Goals*: create a goal (lose fat, gain strength on a specific lift, or build muscle),
-   watch your progress with a bar, and get adaptive suggestions (add a least-recently-trained exercise, keep the current plan,
-   or reduce volume). When you finish a goal and start a new one, the app asks if you want to reuse the last cycle's result.
+   watch your progress with a bar, and get adaptive suggestions. "Add" appends a suggested least-recently-trained exercise
+   to your enrolled plan's best-matched day (requires an enrolled plan first; shows "Added ✓" on success), while "keep the current plan"
+   or "reduce volume" let you stick with or ease your approach. When you finish a goal and start a new one, the app asks if you want to reuse the last cycle's result.
    *Body*: log your current weight and any measurements (waist, chest, arms, thighs, hips); a hand-rolled weight-trend sparkline
    visualizes your progress over time. The Body section header displays your name and computed age (from date of birth).
    *Recovery* (M7): your readiness trend, current training day streak (and best, forgiving up to 2 rest days
