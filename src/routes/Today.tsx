@@ -43,6 +43,8 @@ export function Today() {
   const unit = useUnit()
   const date = today()
   const [adding, setAdding] = useState(false)
+  // First name for the greeting; skip it when the stored name is still an email (pre-profile accounts).
+  const firstName = user?.name && !user.name.includes('@') ? user.name.split(' ')[0] : null
 
   // One reactive query feeds today's session, the calendar marks, the streak, and the agenda.
   const sessions = useRxData<Session>(
@@ -146,6 +148,7 @@ export function Today() {
   return (
     <section>
       <h1 className="font-display text-3xl font-black tracking-tight">Today</h1>
+      {firstName && <p className="mt-1 text-sm text-fog">Hey, <span className="font-bold text-chalk">{firstName}</span> 👋</p>}
       {planned && <p className="mt-1 text-sm font-bold text-amber">{planned.label}</p>}
 
       <CalendarStrip today={date} doneDates={doneDates} scheduledDates={scheduledDates} />

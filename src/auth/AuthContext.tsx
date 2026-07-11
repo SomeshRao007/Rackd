@@ -12,6 +12,17 @@ export type User = {
   name: string
   email: string
   picture?: string
+  dob?: string // YYYY-MM-DD
+  provider?: 'google' | 'password' // gates which account fields are editable
+}
+
+// Partial account edit (Settings → Account). Only include the fields being changed.
+export type AccountUpdate = {
+  name?: string
+  dob?: string
+  email?: string
+  currentPassword?: string
+  newPassword?: string
 }
 
 type AuthState = {
@@ -21,8 +32,9 @@ type AuthState = {
   signIn: () => void
   signOut: () => void
   // Email/password. Resolve to null on success, or a user-facing error message.
-  register: (email: string, password: string) => Promise<string | null>
+  register: (email: string, password: string, name: string, dob: string) => Promise<string | null>
   loginWithPassword: (email: string, password: string) => Promise<string | null>
+  updateAccount: (fields: AccountUpdate) => Promise<string | null>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -44,6 +56,8 @@ function userFromToken(token: string): User | null {
     name: (json.name as string) ?? (json.email as string) ?? 'Athlete',
     email: (json.email as string) ?? '',
     picture: json.picture as string | undefined,
+    dob: json.dob as string | undefined,
+    provider: json.provider as 'google' | 'password' | undefined,
   }
 }
 
@@ -75,13 +89,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<AuthState>(() => {
-    // POST credentials → on success store the minted JWT (same path as the ?token= redirect).
-    const authPost = async (path: string, email: string, password: string) => {
-      const res = await fetch(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
+    // POST a credential/account change → on success store the minted JWT (same path as the
+    // ?token= redirect), so register / login / account-edit all update identity in place.
+    const postJson = async (path: string, payload: unknown, bearer?: string | null): Promise<string | null> => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (bearer) headers.Authorization = `Bearer ${bearer}`
+      const res = await fetch(path, { method: 'POST', headers, body: JSON.stringify(payload) })
       const data = (await res.json().catch(() => ({}))) as { token?: string; error?: string }
       if (!res.ok || !data.token) return data.error ?? 'Something went wrong. Please try again.'
       const u = userFromToken(data.token)
@@ -96,8 +109,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       token,
       loading,
-      register: (email, password) => authPost('/auth/register', email, password),
-      loginWithPassword: (email, password) => authPost('/auth/login', email, password),
+      register: (email, password, name, dob) => postJson('/auth/register', { email, password, name, dob }),
+      loginWithPassword: (email, password) => postJson('/auth/login', { email, password }),
+      updateAccount: (fields) => postJson('/auth/account', fields, token),
       signIn: () => {
         if (STUB) {
           // Built (incl. `wrangler pages dev`): get a REAL JWT from the dev-only function so sync uses the same verified path as prod.

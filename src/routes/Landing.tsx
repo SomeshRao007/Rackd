@@ -1,10 +1,13 @@
 import { Navigate } from 'react-router-dom'
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth/AuthContext'
+import { todayISO } from '../lib/dates'
 
 export function Landing() {
   const { user, signIn, register, loginWithPassword } = useAuth()
   const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [name, setName] = useState('')
+  const [dob, setDob] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -15,7 +18,9 @@ export function Landing() {
     e.preventDefault()
     setBusy(true)
     setError(null)
-    const err = await (mode === 'register' ? register : loginWithPassword)(email, password)
+    const err = await (mode === 'register'
+      ? register(email, password, name, dob)
+      : loginWithPassword(email, password))
     // On success `user` is set → the <Navigate> above redirects on the next render.
     if (err) {
       setError(err)
@@ -72,6 +77,32 @@ export function Landing() {
 
       <div className="pb-10">
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
+          {mode === 'register' && (
+            <>
+              <input
+                type="text"
+                required
+                autoComplete="name"
+                placeholder="Your name"
+                aria-label="Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full rounded-xl border border-steel-700 bg-steel-900 px-4 py-3.5 text-chalk placeholder:text-fog focus-visible:outline-2 focus-visible:outline-amber"
+              />
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-steel-700 bg-steel-900 px-4 py-3.5 text-fog">
+                <span>Date of birth</span>
+                <input
+                  type="date"
+                  autoComplete="bday"
+                  max={todayISO()}
+                  aria-label="Date of birth"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  className="nums bg-transparent text-right text-chalk outline-none [color-scheme:dark]"
+                />
+              </label>
+            </>
+          )}
           <input
             type="email"
             required

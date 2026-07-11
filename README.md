@@ -49,7 +49,8 @@ session. That part isn't built yet (see [Roadmap](#roadmap)).
 - **M8: Exercise intelligence & anatomical body-map** — Replaced primitive-shape body outline with a real male/female + front/back
   anatomical muscle map (SVG paths vendored from MuscleMap). Sex toggle in Settings (localStorage `wa_sex`). New `customexercises`
   RxDB collection with smart auto-classification: create custom exercises by name, and the app auto-tags worked muscles via keyword
-  matching. All exercises (catalog + custom) now appear in a searchable library under the Plans tab (new Plans | Exercises toggle).
+  matching. Custom exercise form now includes a "How to perform" steps editor (add/edit/remove numbered steps) that persist and render on the detail page's Instructions tab.
+  All exercises (catalog + custom) now appear in a searchable library under the Plans tab (new Plans | Exercises toggle).
   The Exercises library is filterable by a "Custom" chip (shows only user-created exercises), muscle group (Chest/Back/Shoulders/Arms/Legs/Core), and equipment
   (barbell/dumbbell/cable/…, including user-added custom types); any combination can be active and filters combine with text search. Each exercise has a detail card (`/app/exercises/:id`)
   with worked-muscle body-map, focus area, equipment, instructions, and cross-session records (heaviest, best e1RM, history); custom exercises show Edit and Delete buttons so users
@@ -67,6 +68,11 @@ session. That part isn't built yet (see [Roadmap](#roadmap)).
   the session stays open for logging extra sets. Green calendar days and rotation advancement count only finished workouts. Data model: `plans` v1→v2 (nullable `enrolledAt`,
   `schedule` JSON), `sessions` v1→v2 (nullable `finishedAt`); new migration `0010_enroll_finish.sql`. New pure-logic module `src/lib/schedule.ts` handles parseSchedule, nextUpIndex,
   forecast, and weekday math.
+- **Post-M8 profile & account features** — Signup now captures name (required) and date of birth (optional). New migration `0011_user_profile.sql` adds `name` and `dob` columns to
+  the `users` table and makes `passwordHash` nullable for Google-only accounts. The app JWT now carries `dob` and `provider` ('google' or 'password'). Google sign-in on first login
+  upserts a local users row and prefers the local name/dob so profile edits persist. New `/auth/account` endpoint (POST, Bearer-authenticated) lets users edit name/dob (all accounts)
+  and email/password (email-password accounts only; password change requires current password). Settings gained an "Account" section to edit these fields. Today greeting shows "Hey, {firstName}".
+  Progress tab's Body section header displays the user's name and computed age (from DOB).
 
 **Not built yet:** recommendations, progress photos (deferred). See [Roadmap](#roadmap).
 
@@ -112,7 +118,8 @@ Cloudflare Pages Functions
   ├─ /share/[code]    — fetch a shared plan snapshot (M3)
   └─ /push/subscribe  — store a Web Push subscription (M7; delivery deploy-gated)
         ▼
-D1 (SQLite) — per-user rows: sessions (M5: +rir, +note; M8.2: +finishedAt), setlogs (M5: +rir, +note),
+D1 (SQLite) — per-user rows: users (auth: email, passwordHash nullable, name, dob; profile table since M8.3),
+              sessions (M5: +rir, +note; M8.2: +finishedAt), setlogs (M5: +rir, +note),
               plans (M3, M5: +scheme; M8.2: +enrolledAt, +schedule), exclusions (M4), goals (M6), bodymetrics (M6),
               readiness (M7), customexercises (M8)
             — cross-user immutable rows: shared_plans (M3)
@@ -139,7 +146,7 @@ npm run dev            # → http://localhost:5173
 
 ```bash
 cp .dev.vars.example .dev.vars        # set JWT_SECRET; Google keys optional, see below
-npx wrangler d1 migrations apply workout-db --local   # creates local D1 tables (M1-M8.2 migrations)
+npx wrangler d1 migrations apply workout-db --local   # creates local D1 tables (M1-M8.2 + M8.3 profile migrations)
 npm run seed                           # merges free-exercise-db + ExerciseDB v1 into public/catalog/exercises.v1.json
 npm run seed:plans                     # generates starter plans into public/catalog/
 npm run seed:bodymap                   # pulls anatomical body-map SVG paths (M8)
@@ -163,7 +170,7 @@ npm run test    # 12 suites: sync replication, rotation, generation, progression
 
 ## Using the app
 
-1. Sign in (email/password or Google).
+1. Sign in (email/password or Google). Sign-up captures your name (required) and date of birth (optional) for profile features (age calculation, greeting, body tracking context).
 2. **Settings** (M4, M8) — Configure your device: environment (home/gym), available equipment, and workout timing.
    Environment and equipment filters which exercises appear when plans are resolved. You can add your own custom equipment types
    (e.g., "sandbag") via an input field; custom types appear as removable toggles in "Available equipment" and also show up in the
@@ -171,6 +178,7 @@ npm run test    # 12 suites: sync replication, rotation, generation, progression
    duration, and a maximum sets-per-exercise ceiling) calibrates how many sets fit the Start-day time budget. The max-sets input (default 6)
    is adjustable to limit how many sets the budget algorithm assigns to any single exercise. Also manage temporary or permanent exclusions
    (rest a muscle group or specific exercise for a preset duration or forever) — useful for injury recovery or focusing on other body parts.
+   An "Account" section at the bottom lets you edit your name and date of birth (both accounts), email and password (email-password accounts only; password change requires current password).
 3. **Plans** (M3, M5, M8.2) — Build your own workout plan or adopt a starter plan. A plan defines "days"
    (e.g., Push, Pull, Legs), each with "slots" (e.g., Horizontal Push). Each slot holds an exercise pool.
    *Enroll* a plan (M8.2) by selecting a start date and your preferred training weekdays (Mon–Sun chips); the app will rotate plan days
@@ -183,9 +191,9 @@ npm run test    # 12 suites: sync replication, rotation, generation, progression
    the app uses it to suggest next-session weight + reps based on your history and logged intensity.
    The Plans tab also has an **Exercises** view (Plans | Exercises toggle): a searchable library of all exercises
    (catalog + custom), filterable by a "Custom" chip, muscle group (Chest/Back/Shoulders/Arms/Legs/Core), and equipment type; any filter can be active and combine with text search.
-   You can create custom exercises (a ＋ button seeding the form, auto-classifying muscles by name). Each exercise opens a detail card with worked-muscle body-map (front/back),
-   focus area, equipment, instructions, and cross-session records (heaviest, best estimated 1RM, history); custom exercises show Edit and Delete buttons for refinement or removal.
-   Returning from an exercise detail page restores the Exercises view.
+   You can create custom exercises (a ＋ button seeding the form, auto-classifying muscles by name); the form includes a "How to perform" steps editor to add/edit/remove numbered instructions.
+   Each exercise opens a detail card with worked-muscle body-map (front/back), focus area, equipment, instructions, and cross-session records (heaviest, best estimated 1RM, history);
+   custom exercises show Edit and Delete buttons for refinement or removal. Instructions persist and render on the detail page's Instructions tab. Returning from an exercise detail page restores the Exercises view.
 4. **Start Day** (M4, M5) — Enter a time budget (minutes). The app auto-assigns sets and target reps
    per exercise to fit the budget: reps are set by exercise role (heavy compounds = 8 reps, isolations = 12 reps,
    unknown = 10), and sets grow one at a time, prioritizing compounds first. Per-set time comes from your
@@ -201,9 +209,10 @@ npm run test    # 12 suites: sync replication, rotation, generation, progression
    watch your progress with a bar, and get adaptive suggestions (add a least-recently-trained exercise, keep the current plan,
    or reduce volume). When you finish a goal and start a new one, the app asks if you want to reuse the last cycle's result.
    *Body*: log your current weight and any measurements (waist, chest, arms, thighs, hips); a hand-rolled weight-trend sparkline
-   visualizes your progress over time. *Recovery* (M7): your readiness trend, current training day streak (and best, forgiving up to 2 rest days
+   visualizes your progress over time. The Body section header displays your name and computed age (from date of birth).
+   *Recovery* (M7): your readiness trend, current training day streak (and best, forgiving up to 2 rest days
    between sessions), a nudge if you've been away long enough to lose progress, and goal-tied badges you've earned.
-6. **Today** (M8, M8.2) — At the top, a CalendarStrip (M8.2) shows a horizontal month view with day chips: today highlighted in amber,
+6. **Today** (M8, M8.2) — At the top, a greeting shows "Hey, {firstName}" using your account name. Below that, a CalendarStrip (M8.2) shows a horizontal month view with day chips: today highlighted in amber,
    days with finished workouts in green, and scheduled training days marked with an amber dot. A button opens a full-month calendar modal
    with ‹ › month navigation and a legend. Below that, if you have an enrolled plan, a "Current plan" card (M8.2) displays the next few
    scheduled days as chips ("Thu 9 · Push") and a "Start {day} workout" button on training days; on rest days it shows "Rest day — next up: …".

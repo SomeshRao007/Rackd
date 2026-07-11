@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useRxData } from '../../db/useRxData'
 import type { BodyMetric } from '../../db/schema'
 import { logBodyMetric } from '../../db/metrics'
 import { useUnit, formatWeight, kgToUnit, unitToKg } from '../../lib/units'
+import { ageFromDob } from '../../lib/dates'
 
 const MEASURES = ['waist', 'chest', 'arms', 'thighs', 'hips'] as const
 const today = () => new Date().toISOString().slice(0, 10)
@@ -17,6 +19,8 @@ export function BodyView() {
     (db) => db.bodymetrics.find({ selector: { userId, deletedAt: null }, sort: [{ date: 'asc' }] }),
     [userId],
   )
+
+  const age = user?.dob ? ageFromDob(user.dob) : null
 
   const [date, setDate] = useState(today)
   const [weight, setWeight] = useState('')
@@ -45,6 +49,23 @@ export function BodyView() {
 
   return (
     <div className="space-y-6">
+      <section className="flex items-center justify-between rounded-2xl border border-steel-800 bg-steel-900 p-4">
+        <div className="min-w-0">
+          <div className="text-xs uppercase tracking-wide text-fog">Profile</div>
+          <div className="truncate font-display text-2xl font-black text-chalk">{user?.name || 'Athlete'}</div>
+        </div>
+        {age != null ? (
+          <div className="shrink-0 text-right">
+            <div className="nums font-display text-3xl font-black text-amber">{age}</div>
+            <div className="text-xs uppercase tracking-wide text-fog">years old</div>
+          </div>
+        ) : (
+          <Link to="/app/settings" className="shrink-0 text-sm font-bold text-amber hover:underline">
+            Add date of birth
+          </Link>
+        )}
+      </section>
+
       {latest ? (
         <section className="rounded-2xl border border-steel-800 bg-steel-900 p-4">
           <div className="flex items-end justify-between">
