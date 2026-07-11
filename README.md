@@ -63,7 +63,8 @@ session. That part isn't built yet (see [Roadmap](#roadmap)).
   (Mon–Sun chips); plan days rotate across the selected weekdays, self-healing over missed sessions. The enrolled plan shows an ENROLLED badge and a "Trains Mon · Thu"-style
   summary, with an Unenroll action. On Today, a new CalendarStrip component displays a horizontal month-view strip (today highlighted amber, finished workouts green,
   scheduled training days with an amber dot) plus a button to open a full-month modal with ‹ › month navigation and legend. A "Current plan" card shows the next few scheduled days
-  and a "Start {day} workout" button on training days; rest days show "Rest day — next up: …". Sessions now have an explicit "Finish workout" button that stamps `finishedAt`;
+  and a "Start {day} workout" button on training days; on rest days, the screen shows a large "Rest day" hero (emoji + headline + recovery message) with the current-plan card
+  as the main content and an inline "Log a lift anyway" link demoting the logging affordance. Sessions now have an explicit "Finish workout" button that stamps `finishedAt`;
   the session stays open for logging extra sets. Green calendar days and rotation advancement count only finished workouts. Data model: `plans` v1→v2 (nullable `enrolledAt`,
   `schedule` JSON), `sessions` v1→v2 (nullable `finishedAt`); new migration `0010_enroll_finish.sql`. New pure-logic module `src/lib/schedule.ts` handles parseSchedule, nextUpIndex,
   forecast, and weekday math.
@@ -222,8 +223,8 @@ npm run test    # suites: sync replication, rotation, generation, progression (M
 6. **Today** (M8, M8.2–M8.3) — At the top, a greeting shows "Hey, {firstName}" using your account name. Below that, a CalendarStrip (M8.2) shows a horizontal month view with day chips: today highlighted in amber,
    days with finished workouts in green, and scheduled training days marked with an amber dot. A button opens a full-month calendar modal
    with ‹ › month navigation, a legend, and each scheduled day labeled with its plan-day name (e.g., "Upper", "Metabolic Burst") so you can see the week ahead at a glance (M8.3).
-   Below that, if you have an enrolled plan, a "Current plan" card (M8.2) displays the next few scheduled days as chips ("Thu 9 · Push") and a "Start {day} workout" button on training days;
-   on rest days it shows "Rest day — next up: …".
+   Below that, if you have an enrolled plan: on training days, a "Current plan" card (M8.2) displays the next few scheduled days as chips ("Thu 9 · Push") and a "Start {day} workout" button;
+   on rest days, a large "Rest day" hero (emoji + headline + recovery message) appears at the top, followed by the current-plan card showing the next scheduled day, and a quiet "Log a lift anyway" link replaces the full logging affordance.
    For traditional strength-training days, when a plan day is locked, each planned exercise appears as an inline mini-logger. For each exercise: see suggested weight + reps (from the plan's progression scheme),
    warm-up sets (steps down from the last working weight), and a plate calculator (barbell plate stack per side; edit the bar weight in the calculator if your bar is not 20 kg).
    A labeled "Info" button on each exercise opens its detail page with instructions, worked muscles, and cross-session records. Tap a row to expand it, log weight × reps per set.

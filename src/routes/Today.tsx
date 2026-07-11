@@ -168,6 +168,10 @@ export function Today() {
     return ids.map((id) => muscleOf.get(id) ?? '')
   }, [planned, groups, muscleOf])
 
+  // Rest day: enrolled, but today isn't a scheduled training day and nothing's started/logged.
+  // Drives the calmer layout — big "Rest day", the plan card as the hero, logging demoted to a link.
+  const restDay = Boolean(enrolled && agenda && !agenda.todayEntry) && !planned && sets.length === 0
+
   return (
     <section>
       <h1 className="font-display text-3xl font-black tracking-tight">Today</h1>
@@ -177,6 +181,8 @@ export function Today() {
       <CalendarStrip today={date} doneDates={doneDates} scheduledDates={scheduledDates} scheduledLabels={scheduledLabels} />
 
       <MotivationStrip userId={userId} date={date} unit={unit} lessonMuscles={lessonMuscles} sessions={sessions} />
+
+      {restDay && <RestDayHero />}
 
       {enrolled && agenda && !(planned && planned.planId === enrolled.id) && (
         <EnrolledCard plan={enrolled} agenda={agenda} date={date} />
@@ -230,7 +236,11 @@ export function Today() {
           {session && <FinishControl session={session} />}
         </>
       ) : sets.length === 0 ? (
-        <EmptyToday onStart={() => setAdding(true)} />
+        restDay ? (
+          <RestDayLog onStart={() => setAdding(true)} />
+        ) : (
+          <EmptyToday onStart={() => setAdding(true)} />
+        )
       ) : (
         <>
           <Stats sets={sets.length} lifts={groups.length} volume={formatWeight(volumeKg, unit)} />
@@ -296,7 +306,7 @@ function EnrolledCard({ plan, agenda, date }: { plan: Plan; agenda: Agenda; date
       ) : (
         next && (
           <p className="mt-3 text-sm text-fog">
-            Rest day — next up: <span className="font-bold text-chalk">{days[next.dayIndex]?.label}</span> on{' '}
+            Next up: <span className="font-bold text-chalk">{days[next.dayIndex]?.label}</span> on{' '}
             {fmtDay(next.date, { weekday: 'long' })}
           </p>
         )
@@ -362,6 +372,38 @@ function Stat({ value, label, wide }: { value: string | number; label: string; w
       <div className={`nums font-display font-black text-amber ${wide ? 'text-xl' : 'text-3xl'}`}>{value}</div>
       <div className="mt-0.5 text-xs uppercase tracking-wide text-fog">{label}</div>
     </div>
+  )
+}
+
+// Rest-day hero (M8): on a scheduled off-day the plan card is the star, so logging steps back.
+// The big statement reassures that resting is on-program, not a missed day.
+function RestDayHero() {
+  return (
+    <div className="mt-6 text-center">
+      <div aria-hidden className="mx-auto grid size-16 place-items-center rounded-2xl bg-steel-800 text-4xl">
+        😴
+      </div>
+      <h2 className="mt-3 font-display text-4xl font-black tracking-tight">Rest day</h2>
+      <p className="mx-auto mt-1.5 max-w-xs text-sm text-fog">
+        Nothing scheduled today. Muscle grows between sessions, not during them.
+      </p>
+    </div>
+  )
+}
+
+// Demoted logging affordance for rest days — a quiet link, not the full empty-state block.
+function RestDayLog({ onStart }: { onStart: () => void }) {
+  return (
+    <p className="mt-8 text-center text-sm text-fog">
+      Feeling good?{' '}
+      <button
+        type="button"
+        onClick={onStart}
+        className="font-semibold text-amber underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber"
+      >
+        Log a lift anyway
+      </button>
+    </p>
   )
 }
 
