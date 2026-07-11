@@ -1,7 +1,16 @@
 import { SignJWT, jwtVerify } from 'jose'
 
-// One place to mint the app JWT — used by Google callback, dev-login, register, login.
-export type AppClaims = { sub: string; email?: string; name?: string; picture?: string }
+// One place to mint the app JWT — used by Google callback, dev-login, register, login, account.
+// dob (YYYY-MM-DD) + provider ride in the token so the client can show age and gate which account
+// fields are editable ('password' → email/password editable; 'google' → managed by Google).
+export type AppClaims = {
+  sub: string
+  email?: string
+  name?: string
+  picture?: string
+  dob?: string
+  provider?: 'google' | 'password'
+}
 
 export function mintAppJwt(claims: AppClaims, secret: string): Promise<string> {
   return new SignJWT(claims)

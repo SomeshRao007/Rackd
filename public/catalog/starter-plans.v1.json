@@ -1,32 +1,32 @@
 [
   {
-    "id": "starter-push-pull-legs",
-    "name": "Push / Pull / Legs",
+    "id": "mg-perfect-ppl",
+    "goal": "muscle-growth",
+    "name": "Perfect PPL Split",
+    "description": "A high-frequency 6-day Push/Pull/Legs split that trains every muscle twice a week. Heavy compound lifts are paired with targeted hypertrophy work and built-in face-pull correctives for healthy shoulders. Best for intermediates training 5–6 days a week.",
     "days": [
       {
-        "id": "push-pull-legs-push",
-        "label": "Push",
+        "id": "mg-perfect-ppl-push-a",
+        "label": "Push A",
         "slots": [
           {
-            "id": "push-pull-legs-push-chest",
+            "id": "mg-perfect-ppl-push-a-1-chest",
             "label": "Chest",
             "exercisePool": [
               "Barbell_Bench_Press_-_Medium_Grip",
-              "Dumbbell_Bench_Press",
-              "Decline_Barbell_Bench_Press"
+              "Dumbbell_Bench_Press"
             ]
           },
           {
-            "id": "push-pull-legs-push-shoulders",
+            "id": "mg-perfect-ppl-push-a-2-shoulders",
             "label": "Shoulders",
             "exercisePool": [
-              "Standing_Military_Press",
               "Dumbbell_Shoulder_Press",
-              "Arnold_Dumbbell_Press"
+              "Standing_Military_Press"
             ]
           },
           {
-            "id": "push-pull-legs-push-side-delts",
+            "id": "mg-perfect-ppl-push-a-3-side-delts",
             "label": "Side delts",
             "exercisePool": [
               "Side_Lateral_Raise",
@@ -34,51 +34,555 @@
             ]
           },
           {
-            "id": "push-pull-legs-push-triceps",
+            "id": "mg-perfect-ppl-push-a-4-triceps",
             "label": "Triceps",
             "exercisePool": [
-              "Triceps_Pushdown",
               "EZ-Bar_Skullcrusher",
-              "Standing_Dumbbell_Triceps_Extension"
+              "Lying_Triceps_Press"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-push-a-5-correctives",
+            "label": "Correctives",
+            "exercisePool": [
+              "Face_Pull"
             ]
           }
         ]
       },
       {
-        "id": "push-pull-legs-pull",
-        "label": "Pull",
+        "id": "mg-perfect-ppl-pull-a",
+        "label": "Pull A",
         "slots": [
           {
-            "id": "push-pull-legs-pull-vertical-pull",
+            "id": "mg-perfect-ppl-pull-a-1-vertical-pull",
             "label": "Vertical pull",
             "exercisePool": [
-              "Wide-Grip_Lat_Pulldown",
               "Pullups",
-              "Chin-Up"
+              "Wide-Grip_Lat_Pulldown"
             ]
           },
           {
-            "id": "push-pull-legs-pull-horizontal-pull",
+            "id": "mg-perfect-ppl-pull-a-2-horizontal-pull",
             "label": "Horizontal pull",
             "exercisePool": [
               "Bent_Over_Barbell_Row",
+              "Seated_Cable_Rows"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-pull-a-3-lats",
+            "label": "Lats",
+            "exercisePool": [
+              "Straight-Arm_Dumbbell_Pullover"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-pull-a-4-biceps",
+            "label": "Biceps",
+            "exercisePool": [
+              "Barbell_Curl",
+              "Alternate_Hammer_Curl"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-pull-a-5-rear-delts",
+            "label": "Rear delts",
+            "exercisePool": [
+              "Face_Pull"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "mg-perfect-ppl-legs-a",
+        "label": "Legs A",
+        "slots": [
+          {
+            "id": "mg-perfect-ppl-legs-a-1-quads",
+            "label": "Quads",
+            "exercisePool": [
+              "Barbell_Squat",
+              "Leg_Press"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-legs-a-2-glutes",
+            "label": "Glutes",
+            "exercisePool": [
+              "Barbell_Hip_Thrust"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-legs-a-3-unilateral",
+            "label": "Unilateral",
+            "exercisePool": [
+              "Split_Squat_with_Dumbbells",
+              "Split_Squats"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-legs-a-4-calves",
+            "label": "Calves",
+            "exercisePool": [
+              "Standing_Calf_Raises"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-legs-a-5-correctives",
+            "label": "Correctives",
+            "exercisePool": [
+              "Face_Pull"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "mg-perfect-ppl-push-b",
+        "label": "Push B",
+        "slots": [
+          {
+            "id": "mg-perfect-ppl-push-b-1-upper-chest",
+            "label": "Upper chest",
+            "exercisePool": [
+              "Incline_Dumbbell_Press",
+              "Barbell_Incline_Bench_Press_-_Medium_Grip"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-push-b-2-shoulders",
+            "label": "Shoulders",
+            "exercisePool": [
+              "Standing_Military_Press",
+              "Barbell_Shoulder_Press"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-push-b-3-chest-fly",
+            "label": "Chest fly",
+            "exercisePool": [
+              "Cable_Crossover",
+              "Incline_Cable_Flye"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-push-b-4-triceps",
+            "label": "Triceps",
+            "exercisePool": [
+              "Close-Grip_Barbell_Bench_Press",
+              "Triceps_Pushdown"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-push-b-5-side-delts",
+            "label": "Side delts",
+            "exercisePool": [
+              "Cable_Seated_Lateral_Raise",
+              "Side_Lateral_Raise"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "mg-perfect-ppl-pull-b",
+        "label": "Pull B",
+        "slots": [
+          {
+            "id": "mg-perfect-ppl-pull-b-1-hinge",
+            "label": "Hinge",
+            "exercisePool": [
+              "Barbell_Deadlift"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-pull-b-2-row",
+            "label": "Row",
+            "exercisePool": [
+              "Bent_Over_Two-Dumbbell_Row",
+              "Barbell_Pendlay_Row"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-pull-b-3-vertical-pull",
+            "label": "Vertical pull",
+            "exercisePool": [
+              "Chin-Up",
+              "Pullups"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-pull-b-4-biceps",
+            "label": "Biceps",
+            "exercisePool": [
+              "Alternate_Hammer_Curl",
+              "Cable_Hammer_Curls_-_Rope_Attachment"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-pull-b-5-rear-delts",
+            "label": "Rear delts",
+            "exercisePool": [
+              "Face_Pull"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "mg-perfect-ppl-legs-b",
+        "label": "Legs B",
+        "slots": [
+          {
+            "id": "mg-perfect-ppl-legs-b-1-hinge",
+            "label": "Hinge",
+            "exercisePool": [
+              "Romanian_Deadlift",
+              "Dumbbell_Romanian_Deadlift"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-legs-b-2-lunge",
+            "label": "Lunge",
+            "exercisePool": [
+              "Barbell_Walking_Lunge",
+              "Bodyweight_Walking_Lunge"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-legs-b-3-quads",
+            "label": "Quads",
+            "exercisePool": [
+              "Leg_Extensions"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-legs-b-4-hamstrings",
+            "label": "Hamstrings",
+            "exercisePool": [
+              "Lying_Leg_Curls",
+              "Seated_Leg_Curl"
+            ]
+          },
+          {
+            "id": "mg-perfect-ppl-legs-b-5-calves",
+            "label": "Calves",
+            "exercisePool": [
+              "Barbell_Seated_Calf_Raise"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mg-ppl-ul-hybrid",
+    "goal": "muscle-growth",
+    "name": "PPL + Upper/Lower Hybrid",
+    "description": "A 5-day hybrid: three heavy Push/Pull/Legs power days feed two higher-volume Upper/Lower hypertrophy days, so every muscle gets both a strength and a growth stimulus each week. Two full rest days keep the nervous system fresh.",
+    "days": [
+      {
+        "id": "mg-ppl-ul-hybrid-push-power",
+        "label": "Push (Power)",
+        "slots": [
+          {
+            "id": "mg-ppl-ul-hybrid-push-power-1-chest",
+            "label": "Chest",
+            "exercisePool": [
+              "Barbell_Bench_Press_-_Medium_Grip"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-push-power-2-shoulders",
+            "label": "Shoulders",
+            "exercisePool": [
+              "Dumbbell_Shoulder_Press"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-push-power-3-side-delts",
+            "label": "Side delts",
+            "exercisePool": [
+              "Side_Lateral_Raise"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-push-power-4-triceps",
+            "label": "Triceps",
+            "exercisePool": [
+              "EZ-Bar_Skullcrusher"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-push-power-5-correctives",
+            "label": "Correctives",
+            "exercisePool": [
+              "Face_Pull"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "mg-ppl-ul-hybrid-pull-power",
+        "label": "Pull (Power)",
+        "slots": [
+          {
+            "id": "mg-ppl-ul-hybrid-pull-power-1-hinge",
+            "label": "Hinge",
+            "exercisePool": [
+              "Barbell_Deadlift"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-pull-power-2-row",
+            "label": "Row",
+            "exercisePool": [
               "Seated_Cable_Rows",
+              "Bent_Over_Barbell_Row"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-pull-power-3-vertical-pull",
+            "label": "Vertical pull",
+            "exercisePool": [
+              "Pullups"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-pull-power-4-biceps",
+            "label": "Biceps",
+            "exercisePool": [
+              "Barbell_Curl"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-pull-power-5-correctives",
+            "label": "Correctives",
+            "exercisePool": [
+              "Face_Pull"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "mg-ppl-ul-hybrid-legs-power",
+        "label": "Legs (Power)",
+        "slots": [
+          {
+            "id": "mg-ppl-ul-hybrid-legs-power-1-quads",
+            "label": "Quads",
+            "exercisePool": [
+              "Barbell_Squat"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-legs-power-2-glutes",
+            "label": "Glutes",
+            "exercisePool": [
+              "Barbell_Hip_Thrust"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-legs-power-3-unilateral",
+            "label": "Unilateral",
+            "exercisePool": [
+              "Crossover_Reverse_Lunge",
+              "Bodyweight_Walking_Lunge"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-legs-power-4-calves",
+            "label": "Calves",
+            "exercisePool": [
+              "Standing_Calf_Raises"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-legs-power-5-correctives",
+            "label": "Correctives",
+            "exercisePool": [
+              "Face_Pull"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "mg-ppl-ul-hybrid-upper-hypertrophy",
+        "label": "Upper (Hypertrophy)",
+        "slots": [
+          {
+            "id": "mg-ppl-ul-hybrid-upper-hypertrophy-1-incline-chest",
+            "label": "Incline chest",
+            "exercisePool": [
+              "Barbell_Incline_Bench_Press_-_Medium_Grip",
+              "Incline_Dumbbell_Press"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-upper-hypertrophy-2-chest-fly",
+            "label": "Chest fly",
+            "exercisePool": [
+              "Flat_Bench_Cable_Flyes",
+              "Cable_Crossover"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-upper-hypertrophy-3-back",
+            "label": "Back",
+            "exercisePool": [
+              "Barbell_Pendlay_Row",
               "Bent_Over_Two-Dumbbell_Row"
             ]
           },
           {
-            "id": "push-pull-legs-pull-rear-delts",
-            "label": "Rear delts",
+            "id": "mg-ppl-ul-hybrid-upper-hypertrophy-4-vertical-pull",
+            "label": "Vertical pull",
             "exercisePool": [
-              "Face_Pull",
-              "Cable_Rear_Delt_Fly"
+              "Pullups"
             ]
           },
           {
-            "id": "push-pull-legs-pull-biceps",
+            "id": "mg-ppl-ul-hybrid-upper-hypertrophy-5-side-delts",
+            "label": "Side delts",
+            "exercisePool": [
+              "Cable_Seated_Lateral_Raise"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-upper-hypertrophy-6-triceps",
+            "label": "Triceps",
+            "exercisePool": [
+              "Cable_Rope_Overhead_Triceps_Extension"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-upper-hypertrophy-7-biceps",
             "label": "Biceps",
             "exercisePool": [
-              "Barbell_Curl",
+              "Cable_Hammer_Curls_-_Rope_Attachment"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "mg-ppl-ul-hybrid-lower-hypertrophy",
+        "label": "Lower (Hypertrophy)",
+        "slots": [
+          {
+            "id": "mg-ppl-ul-hybrid-lower-hypertrophy-1-hinge",
+            "label": "Hinge",
+            "exercisePool": [
+              "Romanian_Deadlift"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-lower-hypertrophy-2-lunge",
+            "label": "Lunge",
+            "exercisePool": [
+              "Barbell_Walking_Lunge"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-lower-hypertrophy-3-quads",
+            "label": "Quads",
+            "exercisePool": [
+              "Leg_Extensions"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-lower-hypertrophy-4-hamstrings",
+            "label": "Hamstrings",
+            "exercisePool": [
+              "Seated_Leg_Curl",
+              "Lying_Leg_Curls"
+            ]
+          },
+          {
+            "id": "mg-ppl-ul-hybrid-lower-hypertrophy-5-calves",
+            "label": "Calves",
+            "exercisePool": [
+              "Barbell_Seated_Calf_Raise"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mg-total-body",
+    "goal": "muscle-growth",
+    "name": "Total-Body Strength & Size",
+    "description": "Three full-body sessions a week, each with a different flavour — a heavy Power day, a hypertrophy Pump day, and a Metabolic conditioning day. It exposes you to strength, growth and work-capacity stimuli in minimal time. Ideal for busy or intermediate lifters.",
+    "days": [
+      {
+        "id": "mg-total-body-power",
+        "label": "Power",
+        "slots": [
+          {
+            "id": "mg-total-body-power-1-squat",
+            "label": "Squat",
+            "exercisePool": [
+              "Barbell_Squat"
+            ]
+          },
+          {
+            "id": "mg-total-body-power-2-press",
+            "label": "Press",
+            "exercisePool": [
+              "Barbell_Bench_Press_-_Medium_Grip"
+            ]
+          },
+          {
+            "id": "mg-total-body-power-3-hinge",
+            "label": "Hinge",
+            "exercisePool": [
+              "Barbell_Deadlift"
+            ]
+          },
+          {
+            "id": "mg-total-body-power-4-pull",
+            "label": "Pull",
+            "exercisePool": [
+              "Pullups",
+              "Wide-Grip_Lat_Pulldown"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "mg-total-body-pump",
+        "label": "Pump",
+        "slots": [
+          {
+            "id": "mg-total-body-pump-1-incline-press",
+            "label": "Incline press",
+            "exercisePool": [
+              "Incline_Dumbbell_Press"
+            ]
+          },
+          {
+            "id": "mg-total-body-pump-2-legs",
+            "label": "Legs",
+            "exercisePool": [
+              "Split_Squat_with_Dumbbells"
+            ]
+          },
+          {
+            "id": "mg-total-body-pump-3-row",
+            "label": "Row",
+            "exercisePool": [
+              "Bent_Over_Two-Dumbbell_Row"
+            ]
+          },
+          {
+            "id": "mg-total-body-pump-4-shoulders",
+            "label": "Shoulders",
+            "exercisePool": [
+              "Dumbbell_Shoulder_Press"
+            ]
+          },
+          {
+            "id": "mg-total-body-pump-5-biceps",
+            "label": "Biceps",
+            "exercisePool": [
               "Dumbbell_Bicep_Curl",
               "Alternate_Hammer_Curl"
             ]
@@ -86,20 +590,109 @@
         ]
       },
       {
-        "id": "push-pull-legs-legs",
-        "label": "Legs",
+        "id": "mg-total-body-metabolic",
+        "label": "Metabolic",
         "slots": [
           {
-            "id": "push-pull-legs-legs-quads",
-            "label": "Quads",
+            "id": "mg-total-body-metabolic-1-legs",
+            "label": "Legs",
             "exercisePool": [
-              "Barbell_Squat",
-              "Leg_Press",
-              "Leg_Extensions"
+              "Freehand_Jump_Squat"
             ]
           },
           {
-            "id": "push-pull-legs-legs-hamstrings",
+            "id": "mg-total-body-metabolic-2-push",
+            "label": "Push",
+            "exercisePool": [
+              "Pushups"
+            ]
+          },
+          {
+            "id": "mg-total-body-metabolic-3-pull",
+            "label": "Pull",
+            "exercisePool": [
+              "Inverted_Row"
+            ]
+          },
+          {
+            "id": "mg-total-body-metabolic-4-lunge",
+            "label": "Lunge",
+            "exercisePool": [
+              "Bodyweight_Walking_Lunge",
+              "Crossover_Reverse_Lunge"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mg-upper-lower",
+    "goal": "muscle-growth",
+    "name": "Upper / Lower Split",
+    "description": "The classic 4-day Upper/Lower split — two upper-body and two lower-body sessions a week. Simple, balanced and proven for building strength and muscle while leaving plenty of recovery. A great first structured plan.",
+    "days": [
+      {
+        "id": "mg-upper-lower-upper",
+        "label": "Upper",
+        "slots": [
+          {
+            "id": "mg-upper-lower-upper-1-chest",
+            "label": "Chest",
+            "exercisePool": [
+              "Barbell_Bench_Press_-_Medium_Grip",
+              "Dumbbell_Bench_Press"
+            ]
+          },
+          {
+            "id": "mg-upper-lower-upper-2-back",
+            "label": "Back",
+            "exercisePool": [
+              "Bent_Over_Barbell_Row",
+              "Wide-Grip_Lat_Pulldown",
+              "Seated_Cable_Rows"
+            ]
+          },
+          {
+            "id": "mg-upper-lower-upper-3-shoulders",
+            "label": "Shoulders",
+            "exercisePool": [
+              "Dumbbell_Shoulder_Press",
+              "Standing_Military_Press"
+            ]
+          },
+          {
+            "id": "mg-upper-lower-upper-4-biceps",
+            "label": "Biceps",
+            "exercisePool": [
+              "Barbell_Curl",
+              "Alternate_Hammer_Curl"
+            ]
+          },
+          {
+            "id": "mg-upper-lower-upper-5-triceps",
+            "label": "Triceps",
+            "exercisePool": [
+              "Triceps_Pushdown",
+              "EZ-Bar_Skullcrusher"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "mg-upper-lower-lower",
+        "label": "Lower",
+        "slots": [
+          {
+            "id": "mg-upper-lower-lower-1-quads",
+            "label": "Quads",
+            "exercisePool": [
+              "Barbell_Squat",
+              "Leg_Press"
+            ]
+          },
+          {
+            "id": "mg-upper-lower-lower-2-hamstrings",
             "label": "Hamstrings",
             "exercisePool": [
               "Barbell_Deadlift",
@@ -107,7 +700,15 @@
             ]
           },
           {
-            "id": "push-pull-legs-legs-calves",
+            "id": "mg-upper-lower-lower-3-accessory",
+            "label": "Accessory",
+            "exercisePool": [
+              "Leg_Extensions",
+              "Barbell_Walking_Lunge"
+            ]
+          },
+          {
+            "id": "mg-upper-lower-lower-4-calves",
             "label": "Calves",
             "exercisePool": [
               "Standing_Calf_Raises",
@@ -119,90 +720,348 @@
     ]
   },
   {
-    "id": "starter-upper-lower",
-    "name": "Upper / Lower",
+    "id": "sa-bodyweight-basics",
+    "goal": "stay-active",
+    "name": "Foundational Bodyweight Circuit",
+    "description": "A no-equipment foundation built on the basics — squat, push, pull, hinge and brace — done 2–3 times a week. Focus on clean movement and a two-second squeeze at the top of every rep. Perfect for beginners, deload weeks, or training at home.",
     "days": [
       {
-        "id": "upper-lower-upper",
-        "label": "Upper",
+        "id": "sa-bodyweight-basics-full-body",
+        "label": "Full Body",
         "slots": [
           {
-            "id": "upper-lower-upper-chest",
-            "label": "Chest",
+            "id": "sa-bodyweight-basics-full-body-1-squat",
+            "label": "Squat",
             "exercisePool": [
-              "Barbell_Bench_Press_-_Medium_Grip",
-              "Dumbbell_Bench_Press"
+              "Bodyweight_Squat"
             ]
           },
           {
-            "id": "upper-lower-upper-back",
-            "label": "Back",
+            "id": "sa-bodyweight-basics-full-body-2-push",
+            "label": "Push",
             "exercisePool": [
-              "Bent_Over_Barbell_Row",
-              "Wide-Grip_Lat_Pulldown",
-              "Seated_Cable_Rows"
+              "Pushups",
+              "Incline_Push-Up"
             ]
           },
           {
-            "id": "upper-lower-upper-shoulders",
-            "label": "Shoulders",
+            "id": "sa-bodyweight-basics-full-body-3-pull",
+            "label": "Pull",
             "exercisePool": [
-              "Dumbbell_Shoulder_Press",
-              "Standing_Military_Press"
+              "Inverted_Row"
             ]
           },
           {
-            "id": "upper-lower-upper-biceps",
-            "label": "Biceps",
+            "id": "sa-bodyweight-basics-full-body-4-glutes",
+            "label": "Glutes",
             "exercisePool": [
-              "Barbell_Curl",
-              "Alternate_Hammer_Curl"
+              "Butt_Lift_Bridge",
+              "Single_Leg_Glute_Bridge"
             ]
           },
           {
-            "id": "upper-lower-upper-triceps",
-            "label": "Triceps",
+            "id": "sa-bodyweight-basics-full-body-5-core",
+            "label": "Core",
             "exercisePool": [
-              "Triceps_Pushdown",
-              "EZ-Bar_Skullcrusher"
+              "Plank"
+            ]
+          },
+          {
+            "id": "sa-bodyweight-basics-full-body-6-correctives",
+            "label": "Correctives",
+            "exercisePool": [
+              "Face_Pull"
             ]
           }
         ]
-      },
+      }
+    ]
+  },
+  {
+    "id": "sa-30-min-full-body",
+    "goal": "stay-active",
+    "name": "30-Minute Full-Body",
+    "description": "A brisk full-body dumbbell circuit that maintains strength and bone density in about 30 minutes, twice a week. Move through goblet squat, press, row, hinge and a loaded carry with short rest — heavy enough to count, quick enough to keep up.",
+    "days": [
       {
-        "id": "upper-lower-lower",
-        "label": "Lower",
+        "id": "sa-30-min-full-body-full-body",
+        "label": "Full Body",
         "slots": [
           {
-            "id": "upper-lower-lower-quads",
-            "label": "Quads",
+            "id": "sa-30-min-full-body-full-body-1-legs",
+            "label": "Legs",
             "exercisePool": [
-              "Barbell_Squat",
-              "Leg_Press"
+              "Goblet_Squat",
+              "Kettlebell_Goblet_Squat"
             ]
           },
           {
-            "id": "upper-lower-lower-hamstrings",
-            "label": "Hamstrings",
+            "id": "sa-30-min-full-body-full-body-2-push",
+            "label": "Push",
             "exercisePool": [
-              "Barbell_Deadlift",
-              "Lying_Leg_Curls"
+              "Push_Press"
             ]
           },
           {
-            "id": "upper-lower-lower-accessory",
-            "label": "Accessory",
+            "id": "sa-30-min-full-body-full-body-3-pull",
+            "label": "Pull",
             "exercisePool": [
-              "Leg_Extensions",
-              "Barbell_Lunge"
+              "Bent_Over_Two-Dumbbell_Row"
             ]
           },
           {
-            "id": "upper-lower-lower-calves",
-            "label": "Calves",
+            "id": "sa-30-min-full-body-full-body-4-hinge",
+            "label": "Hinge",
             "exercisePool": [
-              "Standing_Calf_Raises",
-              "Rocking_Standing_Calf_Raise"
+              "Dumbbell_Romanian_Deadlift"
+            ]
+          },
+          {
+            "id": "sa-30-min-full-body-full-body-5-carry",
+            "label": "Carry",
+            "exercisePool": [
+              "Farmers_Walk"
+            ]
+          },
+          {
+            "id": "sa-30-min-full-body-full-body-6-core",
+            "label": "Core",
+            "exercisePool": [
+              "Plank"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "sa-mobility-flow",
+    "goal": "stay-active",
+    "name": "Daily Mobility Flow",
+    "description": "A daily 10-minute mobility flow to undo desk posture and keep joints healthy. Move through controlled holds — wall slides, thoracic and hip openers — breathing into each position. Use it on rest days or as a warm-up; no equipment needed.",
+    "days": [
+      {
+        "id": "sa-mobility-flow-mobility-flow",
+        "label": "Mobility Flow",
+        "mode": "circuit",
+        "workSec": 30,
+        "restSec": 5,
+        "rounds": 2,
+        "slots": [
+          {
+            "id": "sa-mobility-flow-mobility-flow-1-shoulders",
+            "label": "Shoulders",
+            "exercisePool": [
+              "Scapular_Wall_Slide"
+            ]
+          },
+          {
+            "id": "sa-mobility-flow-mobility-flow-2-thoracic",
+            "label": "Thoracic",
+            "exercisePool": [
+              "Cat_Stretch"
+            ]
+          },
+          {
+            "id": "sa-mobility-flow-mobility-flow-3-hip-opener",
+            "label": "Hip opener",
+            "exercisePool": [
+              "Worlds_Greatest_Stretch"
+            ]
+          },
+          {
+            "id": "sa-mobility-flow-mobility-flow-4-hips",
+            "label": "Hips",
+            "exercisePool": [
+              "Standing_Hip_Circles"
+            ]
+          },
+          {
+            "id": "sa-mobility-flow-mobility-flow-5-decompress",
+            "label": "Decompress",
+            "exercisePool": [
+              "Childs_Pose"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "wl-metabolic-burst",
+    "goal": "weight-loss",
+    "name": "Metabolic Burst (HIIT)",
+    "description": "A 20-minute HIIT circuit built to spike your heart rate and keep burning calories long after you finish (the EPOC effect). Thirty seconds all-out, thirty seconds rest, four rounds. Preserves muscle while torching fat — only an optional kettlebell needed.",
+    "days": [
+      {
+        "id": "wl-metabolic-burst-burst-circuit",
+        "label": "Burst Circuit",
+        "mode": "circuit",
+        "workSec": 30,
+        "restSec": 30,
+        "rounds": 4,
+        "slots": [
+          {
+            "id": "wl-metabolic-burst-burst-circuit-1-full-body",
+            "label": "Full body",
+            "exercisePool": [
+              "Mountain_Climbers"
+            ]
+          },
+          {
+            "id": "wl-metabolic-burst-burst-circuit-2-legs",
+            "label": "Legs",
+            "exercisePool": [
+              "Freehand_Jump_Squat"
+            ]
+          },
+          {
+            "id": "wl-metabolic-burst-burst-circuit-3-full-body",
+            "label": "Full body",
+            "exercisePool": [
+              "Burpee"
+            ]
+          },
+          {
+            "id": "wl-metabolic-burst-burst-circuit-4-conditioning",
+            "label": "Conditioning",
+            "exercisePool": [
+              "Star_Jump"
+            ]
+          },
+          {
+            "id": "wl-metabolic-burst-burst-circuit-5-hinge",
+            "label": "Hinge",
+            "exercisePool": [
+              "Kettlebell_Swing"
+            ]
+          },
+          {
+            "id": "wl-metabolic-burst-burst-circuit-6-cardio",
+            "label": "Cardio",
+            "exercisePool": [
+              "High_Knees"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "wl-conditioning-shred",
+    "goal": "weight-loss",
+    "name": "Full-Body Conditioning Shred",
+    "description": "A brutal, time-efficient shred that pairs push, pull and lower-body power with almost no rest to flood the muscles with metabolites. Forty seconds work, twenty seconds rest, three rounds — roughly 15 sweaty minutes. Scale the pace to your fitness.",
+    "days": [
+      {
+        "id": "wl-conditioning-shred-shred-circuit",
+        "label": "Shred Circuit",
+        "mode": "circuit",
+        "workSec": 40,
+        "restSec": 20,
+        "rounds": 3,
+        "slots": [
+          {
+            "id": "wl-conditioning-shred-shred-circuit-1-full-body",
+            "label": "Full body",
+            "exercisePool": [
+              "Burpee"
+            ]
+          },
+          {
+            "id": "wl-conditioning-shred-shred-circuit-2-push",
+            "label": "Push",
+            "exercisePool": [
+              "Pushups"
+            ]
+          },
+          {
+            "id": "wl-conditioning-shred-shred-circuit-3-legs",
+            "label": "Legs",
+            "exercisePool": [
+              "Freehand_Jump_Squat"
+            ]
+          },
+          {
+            "id": "wl-conditioning-shred-shred-circuit-4-core",
+            "label": "Core",
+            "exercisePool": [
+              "Mountain_Climbers"
+            ]
+          },
+          {
+            "id": "wl-conditioning-shred-shred-circuit-5-power",
+            "label": "Power",
+            "exercisePool": [
+              "Kettlebell_Thruster",
+              "Barbell_Thruster"
+            ]
+          },
+          {
+            "id": "wl-conditioning-shred-shred-circuit-6-brace",
+            "label": "Brace",
+            "exercisePool": [
+              "Plank"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "wl-sprint-conditioning",
+    "goal": "weight-loss",
+    "name": "Outdoor Sprint Conditioning",
+    "description": "Explosive outdoor (or treadmill) conditioning inspired by hill-sprint training — short maximal efforts with full recovery to build power and drive fat loss. Twenty seconds hard, forty seconds easy, six rounds. Find a hill or open stretch and go.",
+    "days": [
+      {
+        "id": "wl-sprint-conditioning-sprint-circuit",
+        "label": "Sprint Circuit",
+        "mode": "circuit",
+        "workSec": 20,
+        "restSec": 40,
+        "rounds": 6,
+        "slots": [
+          {
+            "id": "wl-sprint-conditioning-sprint-circuit-1-sprint",
+            "label": "Sprint",
+            "exercisePool": [
+              "Sprint"
+            ]
+          },
+          {
+            "id": "wl-sprint-conditioning-sprint-circuit-2-crawl",
+            "label": "Crawl",
+            "exercisePool": [
+              "Bear_Crawl"
+            ]
+          },
+          {
+            "id": "wl-sprint-conditioning-sprint-circuit-3-lunge",
+            "label": "Lunge",
+            "exercisePool": [
+              "Bodyweight_Walking_Lunge"
+            ]
+          },
+          {
+            "id": "wl-sprint-conditioning-sprint-circuit-4-jump",
+            "label": "Jump",
+            "exercisePool": [
+              "Freehand_Jump_Squat"
+            ]
+          },
+          {
+            "id": "wl-sprint-conditioning-sprint-circuit-5-plyo",
+            "label": "Plyo",
+            "exercisePool": [
+              "Knee_Tuck_Jump"
+            ]
+          },
+          {
+            "id": "wl-sprint-conditioning-sprint-circuit-6-power",
+            "label": "Power",
+            "exercisePool": [
+              "Front_Box_Jump"
             ]
           }
         ]

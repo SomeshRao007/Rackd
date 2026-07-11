@@ -1,15 +1,18 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth, type AccountUpdate } from '../auth/AuthContext'
+import { todayISO } from '../lib/dates'
 import { useRxData } from '../db/useRxData'
 import type { Exclusion } from '../db/schema'
 import { addExclusion, removeExclusion } from '../db/exclusions'
+import { exportData } from '../db/actions'
 import {
   usePrefs, setEnvironment, setEquipment, setRestSec, setWorkSec, setMaxSets,
-  ALL_EQUIPMENT, type Environment,
+  addCustomEquipment, removeCustomEquipment, ALL_EQUIPMENT, type Environment,
 } from '../lib/prefs'
 import { MUSCLES } from '../lib/muscles'
 import { useSex, setSex, type Sex } from '../lib/sex'
+import { useUnit, setUnit, type Unit } from '../lib/units'
 import { pushSupported, pushConfigured, pushPermission, subscribeToPush } from '../lib/push'
 
 // Duration presets for an exclusion; null = forever.
@@ -57,6 +60,11 @@ export function Settings() {
       <BodyToggle />
       <p className="mt-1.5 text-xs text-fog">Sets the muscle-map figure shown on your Progress and exercise screens.</p>
 
+      {/* Units — weight unit shown wherever weights appear */}
+      <h2 className="mt-6 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Units</h2>
+      <UnitToggle />
+      <p className="mt-1.5 text-xs text-fog">Sets the weight unit used across logging, plans and history.</p>
+
       {/* Environment */}
       <h2 className="mt-6 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Environment</h2>
       <div role="group" aria-label="Environment" className="flex overflow-hidden rounded-xl border border-steel-700 text-sm font-bold">
@@ -91,8 +99,26 @@ export function Settings() {
             </button>
           )
         })}
+        {/* Custom types carry a remove (×); built-ins can only be toggled. */}
+        {prefs.customEquipment.map((item) => {
+          const on = prefs.equipment.includes(item)
+          return (
+            <span key={item} className={`inline-flex items-center rounded-lg text-sm font-semibold capitalize transition-colors ${on ? 'bg-amber text-ink' : 'bg-steel-800 text-fog'}`}>
+              <button type="button" onClick={() => toggleEquip(item)} aria-pressed={on} className="py-2 pl-3 pr-1.5">{item}</button>
+              <button
+                type="button"
+                onClick={() => removeCustomEquipment(item)}
+                aria-label={`Remove ${item}`}
+                className={`py-2 pl-1 pr-2.5 opacity-70 hover:opacity-100 ${on ? 'text-ink' : 'text-fog hover:text-chalk'}`}
+              >
+                ×
+              </button>
+            </span>
+          )
+        })}
       </div>
-      <p className="mt-1.5 text-xs text-fog">Generation only suggests exercises you can do. Bodyweight always counts.</p>
+      <AddEquipment existing={[...ALL_EQUIPMENT, ...prefs.customEquipment]} />
+      <p className="mt-1.5 text-xs text-fog">Generation only suggests exercises you can do. Bodyweight always counts. Add your own gear if it’s not listed.</p>
 
       {/* Workout timing — calibrates the Start-day time budget */}
       <h2 className="mt-7 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Workout timing</h2>
@@ -138,7 +164,162 @@ export function Settings() {
           Nothing excluded. Rest a muscle group here, or tap “Rest” on any exercise.
         </p>
       )}
+
+      {/* Account — personal details; edits re-mint the JWT so identity updates in place */}
+      <h2 className="mt-7 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Account</h2>
+      <AccountSettings />
+
+      {/* Backup — download a JSON snapshot of everything */}
+      <h2 className="mt-7 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Backup</h2>
+      <button
+        type="button"
+        onClick={() => void exportData()}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-steel-800 py-3 font-display font-black uppercase tracking-wide text-fog transition-colors hover:bg-amber hover:text-ink"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+        </svg>
+        Export data
+      </button>
+      <p className="mt-1.5 text-xs text-fog">Downloads a JSON file of your workouts, plans and settings.</p>
     </section>
+  )
+}
+
+// Personal details. Name + date of birth apply to any account; email + password are editable only
+// for email/password accounts (Google manages those). updateAccount posts the changed fields and,
+// on success, stores the freshly-minted token — so the header, greeting, and Body tab update live.
+function AccountSettings() {
+  const { user, updateAccount } = useAuth()
+  const isPassword = user?.provider === 'password'
+
+  // A stored name that's still an email (pre-profile account) shouldn't prefill the name box.
+  const initialName = user?.name && !user.name.includes('@') ? user.name : ''
+  const [name, setName] = useState(initialName)
+  const [dob, setDob] = useState(user?.dob ?? '')
+  const [email, setEmail] = useState(user?.email ?? '')
+  const [profileMsg, setProfileMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [savingProfile, setSavingProfile] = useState(false)
+
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [savingPw, setSavingPw] = useState(false)
+
+  const saveProfile = async () => {
+    if (!name.trim() || savingProfile) return
+    setSavingProfile(true)
+    setProfileMsg(null)
+    const fields: AccountUpdate = { name, dob }
+    if (isPassword) fields.email = email
+    const err = await updateAccount(fields)
+    setSavingProfile(false)
+    setProfileMsg(err ? { ok: false, text: err } : { ok: true, text: 'Saved.' })
+  }
+
+  const changePassword = async () => {
+    if (!currentPassword || newPassword.length < 8 || savingPw) return
+    setSavingPw(true)
+    setPwMsg(null)
+    const err = await updateAccount({ currentPassword, newPassword })
+    setSavingPw(false)
+    if (err) return setPwMsg({ ok: false, text: err })
+    setPwMsg({ ok: true, text: 'Password changed.' })
+    setCurrentPassword('')
+    setNewPassword('')
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-3 rounded-xl border border-steel-800 bg-steel-900 p-4">
+        <label className="block">
+          <span className="text-xs font-bold uppercase tracking-wider text-fog">Name</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your name"
+            className="mt-1.5 w-full rounded-lg border border-steel-700 bg-steel-800 px-3 py-2.5 text-sm text-chalk placeholder:text-steel-600 focus-visible:border-amber focus-visible:outline-none"
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-xs font-bold uppercase tracking-wider text-fog">Date of birth</span>
+          <input
+            type="date"
+            max={todayISO()}
+            value={dob}
+            onChange={(e) => setDob(e.target.value)}
+            className="nums mt-1.5 w-full rounded-lg border border-steel-700 bg-steel-800 px-3 py-2.5 text-sm text-chalk [color-scheme:dark] focus-visible:border-amber focus-visible:outline-none"
+          />
+        </label>
+
+        {isPassword ? (
+          <label className="block">
+            <span className="text-xs font-bold uppercase tracking-wider text-fog">Email</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              className="mt-1.5 w-full rounded-lg border border-steel-700 bg-steel-800 px-3 py-2.5 text-sm text-chalk placeholder:text-steel-600 focus-visible:border-amber focus-visible:outline-none"
+            />
+          </label>
+        ) : (
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-fog">Email</span>
+            <p className="mt-1.5 text-sm text-chalk">
+              {user?.email} <span className="text-fog">· managed by Google</span>
+            </p>
+          </div>
+        )}
+
+        {profileMsg && (
+          <p className={`text-sm font-semibold ${profileMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{profileMsg.text}</p>
+        )}
+        <button
+          type="button"
+          onClick={saveProfile}
+          disabled={savingProfile || !name.trim()}
+          className="w-full rounded-xl bg-amber py-3 font-display font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright disabled:opacity-50"
+        >
+          {savingProfile ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+
+      {isPassword && (
+        <div className="space-y-3 rounded-xl border border-steel-800 bg-steel-900 p-4">
+          <span className="text-xs font-bold uppercase tracking-wider text-fog">Change password</span>
+          <input
+            type="password"
+            autoComplete="current-password"
+            placeholder="Current password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className="w-full rounded-lg border border-steel-700 bg-steel-800 px-3 py-2.5 text-sm text-chalk placeholder:text-steel-600 focus-visible:border-amber focus-visible:outline-none"
+          />
+          <input
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            placeholder="New password (min 8 characters)"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="w-full rounded-lg border border-steel-700 bg-steel-800 px-3 py-2.5 text-sm text-chalk placeholder:text-steel-600 focus-visible:border-amber focus-visible:outline-none"
+          />
+          {pwMsg && (
+            <p className={`text-sm font-semibold ${pwMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{pwMsg.text}</p>
+          )}
+          <button
+            type="button"
+            onClick={changePassword}
+            disabled={savingPw || !currentPassword || newPassword.length < 8}
+            className="w-full rounded-xl bg-steel-800 py-3 font-display font-black uppercase tracking-wide text-fog transition-colors hover:bg-amber hover:text-ink disabled:opacity-50 disabled:hover:bg-steel-800 disabled:hover:text-fog"
+          >
+            {savingPw ? 'Updating…' : 'Update password'}
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -155,6 +336,25 @@ function BodyToggle() {
           className={`flex-1 py-3 capitalize transition-colors ${sex === s ? 'bg-amber text-ink' : 'text-fog hover:text-chalk'}`}
         >
           {s}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function UnitToggle() {
+  const unit = useUnit()
+  return (
+    <div role="group" aria-label="Weight unit" className="flex overflow-hidden rounded-xl border border-steel-700 text-sm font-bold">
+      {(['kg', 'lb'] as Unit[]).map((u) => (
+        <button
+          key={u}
+          type="button"
+          onClick={() => setUnit(u)}
+          aria-pressed={unit === u}
+          className={`flex-1 py-3 uppercase transition-colors ${unit === u ? 'bg-amber text-ink' : 'text-fog hover:text-chalk'}`}
+        >
+          {u}
         </button>
       ))}
     </div>
@@ -224,6 +424,35 @@ function NumberPref({
         <span className="text-sm font-semibold text-fog">{suffix}</span>
       </span>
     </label>
+  )
+}
+
+function AddEquipment({ existing }: { existing: string[] }) {
+  const [name, setName] = useState('')
+  const norm = name.trim().toLowerCase()
+  const dupe = norm !== '' && existing.includes(norm)
+  const add = () => {
+    if (!norm || dupe) return
+    addCustomEquipment(name)
+    setName('')
+  }
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); add() }} className="mt-2 flex gap-2">
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Add equipment (e.g. sandbag)"
+        aria-label="Add custom equipment"
+        className="min-w-0 flex-1 rounded-lg border border-steel-700 bg-steel-900 px-3 py-2 text-sm text-chalk placeholder:text-steel-600 focus-visible:border-amber focus-visible:outline-none"
+      />
+      <button
+        type="submit"
+        disabled={!norm || dupe}
+        className="shrink-0 rounded-lg bg-steel-800 px-4 py-2 text-sm font-bold text-fog transition-colors hover:bg-amber hover:text-ink disabled:opacity-40 disabled:hover:bg-steel-800 disabled:hover:text-fog"
+      >
+        {dupe ? 'Added' : 'Add'}
+      </button>
+    </form>
   )
 }
 

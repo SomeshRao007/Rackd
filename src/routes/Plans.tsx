@@ -1,13 +1,24 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import type { Plan, PlanDay, Exercise, CustomExercise } from '../db/schema'
-import { createPlan, deletePlan, adoptPlan, fetchSharedPlan } from '../db/plans'
+import { createPlan, deletePlan, adoptPlan, fetchSharedPlan, enrollPlan, unenrollPlan } from '../db/plans'
+import { parseSchedule, type PlanSchedule } from '../lib/schedule'
 import { customToExercise } from '../db/customExercises'
 import { CreateCustomExercise } from '../components/CreateCustomExercise'
+import { ExerciseFilters } from '../components/ExerciseFilters'
+import { filterExercises, equipmentOptionsOf, type ExerciseFilter } from '../lib/exerciseFilter'
+import { usePrefs } from '../lib/prefs'
 
-type Starter = { id: string; name: string; days: PlanDay[] }
+type StarterGoal = 'muscle-growth' | 'stay-active' | 'weight-loss'
+type Starter = { id: string; goal: StarterGoal; name: string; description: string; days: PlanDay[] }
+const GOAL_ORDER: StarterGoal[] = ['muscle-growth', 'stay-active', 'weight-loss']
+const GOAL_LABEL: Record<StarterGoal, string> = {
+  'muscle-growth': 'Muscle growth',
+  'stay-active': 'Stay active',
+  'weight-loss': 'Weight loss',
+}
 const parseDays = (p: Plan): PlanDay[] => {
   try {
     return JSON.parse(p.days) as PlanDay[]
@@ -26,8 +37,23 @@ export function Plans() {
     [userId],
   )
 
-  const [view, setView] = useState<'plans' | 'exercises'>('plans')
+  // Tab lives in the URL (?tab=exercises) so returning from an exercise detail (navigate(-1))
+  // restores the Exercises tab instead of resetting to Plans. Toggle only the `tab` key so the
+  // Exercises filter params (also in the URL) survive a tab switch.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const view = searchParams.get('tab') === 'exercises' ? 'exercises' : 'plans'
+  const setView = (v: 'plans' | 'exercises') =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (v === 'exercises') next.set('tab', 'exercises')
+        else next.delete('tab')
+        return next
+      },
+      { replace: true },
+    )
   const [browsing, setBrowsing] = useState(false)
+  const [enrolling, setEnrolling] = useState<Plan | null>(null)
   const [starters, setStarters] = useState<Starter[]>([])
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -103,11 +129,20 @@ export function Plans() {
         <ul className="mt-5 space-y-3">
           {plans.map((p) => {
             const days = parseDays(p)
+            const isEnrolled = p.enrolledAt != null
             return (
-              <li key={p.id} className="rounded-2xl border border-steel-800 bg-steel-900 p-4">
+              <li
+                key={p.id}
+                className={`rounded-2xl border p-4 ${isEnrolled ? 'border-amber bg-amber/5' : 'border-steel-800 bg-steel-900'}`}
+              >
                 <div className="flex items-center gap-2">
-                  <Link to={`/app/plans/${p.id}`} className="flex-1 font-display text-lg font-bold hover:text-amber">
+                  <Link to={`/app/plans/${p.id}`} className="min-w-0 flex-1 font-display text-lg font-bold hover:text-amber">
                     {p.name || 'Untitled plan'}
+                    {isEnrolled && (
+                      <span className="ml-2 inline-block translate-y-[-2px] rounded-full bg-amber px-2 py-0.5 align-middle text-[0.6rem] font-black uppercase tracking-wide text-ink">
+                        Enrolled
+                      </span>
+                    )}
                   </Link>
                   <Link
                     to={`/app/plans/${p.id}`}
@@ -144,6 +179,28 @@ export function Plans() {
                       </button>
                     ))}
                   </div>
+                )}
+                {isEnrolled ? (
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-fog">{scheduleSummary(p.schedule)}</p>
+                    <button
+                      type="button"
+                      onClick={() => void unenrollPlan(p.id)}
+                      className="text-xs font-semibold text-fog underline-offset-2 transition-colors hover:text-chalk hover:underline"
+                    >
+                      Unenroll
+                    </button>
+                  </div>
+                ) : (
+                  days.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setEnrolling(p)}
+                      className="mt-3 w-full rounded-xl border border-amber/60 py-2 text-sm font-black uppercase tracking-wide text-amber transition-colors hover:bg-amber hover:text-ink"
+                    >
+                      Enroll
+                    </button>
+                  )
                 )}
               </li>
             )
@@ -194,7 +251,110 @@ export function Plans() {
       {browsing && (
         <StarterBrowser starters={starters} onAdopt={onAdoptStarter} onClose={() => setBrowsing(false)} />
       )}
+      {enrolling && (
+        <EnrollDialog
+          plan={enrolling}
+          onConfirm={async (schedule) => {
+            await enrollPlan(userId, enrolling.id, schedule)
+            setEnrolling(null)
+          }}
+          onClose={() => setEnrolling(null)}
+        />
+      )}
     </section>
+  )
+}
+
+// Mon-first weekday chips; values are Date.getDay() 0–6.
+const WEEKDAYS = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 0, label: 'Sun' },
+]
+
+function scheduleSummary(raw: string | null | undefined): string {
+  const s = parseSchedule(raw)
+  if (!s) return ''
+  const names = WEEKDAYS.filter((w) => s.weekdays.includes(w.value)).map((w) => w.label)
+  return `Trains ${names.join(' · ')}`
+}
+
+// Enrollment (M8.2): start date + training weekdays; plan days rotate across those dates on Today.
+function EnrollDialog({
+  plan,
+  onConfirm,
+  onClose,
+}: {
+  plan: Plan
+  onConfirm: (schedule: PlanSchedule) => Promise<void>
+  onClose: () => void
+}) {
+  const [start, setStart] = useState(() => new Date().toISOString().slice(0, 10))
+  const [picked, setPicked] = useState<number[]>([])
+  const toggle = (v: number) =>
+    setPicked((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]))
+
+  return (
+    <div className="fixed inset-0 z-30 grid place-items-center bg-ink/95 p-4 backdrop-blur">
+      <div className="w-full max-w-sm rounded-2xl border border-steel-800 bg-steel-900 p-5">
+        <h2 className="font-display text-xl font-black tracking-tight">Enroll in {plan.name || 'this plan'}</h2>
+        <p className="mt-1 text-sm text-fog">
+          Pick your training days — the plan's days rotate across them, and Today shows what's up next.
+        </p>
+
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-fog">
+          Starting
+          <input
+            type="date"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            className="mt-1.5 w-full rounded-lg border border-steel-700 bg-steel-950 px-3 py-2 text-base text-chalk [color-scheme:dark] focus-visible:border-amber focus-visible:outline-none"
+          />
+        </label>
+
+        <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-fog">Training days</p>
+        <div className="mt-1.5 grid grid-cols-7 gap-1">
+          {WEEKDAYS.map((w) => {
+            const active = picked.includes(w.value)
+            return (
+              <button
+                key={w.value}
+                type="button"
+                onClick={() => toggle(w.value)}
+                aria-pressed={active}
+                className={`rounded-lg py-2 text-xs font-bold transition-colors ${
+                  active ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'
+                }`}
+              >
+                {w.label}
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-steel-700 py-3 font-display font-black uppercase tracking-wide text-chalk transition-colors hover:bg-steel-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={picked.length === 0 || !start}
+            onClick={() => void onConfirm({ start, weekdays: picked })}
+            className="rounded-xl bg-amber py-3 font-display font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright disabled:opacity-50"
+          >
+            Enroll
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -205,7 +365,37 @@ function ExercisesList() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const userId = user?.id ?? ''
-  const [query, setQuery] = useState('')
+  const prefs = usePrefs()
+  // Filters live in the URL (one param each) so opening an exercise and coming back — navigate(-1),
+  // which restores the full previous URL — brings the filters back, just like the tab. Writes are
+  // `replace: true` so per-keystroke edits don't flood the history stack, and preserve `tab`.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filter = useMemo<ExerciseFilter>(
+    () => ({
+      query: searchParams.get('q') ?? '',
+      group: (searchParams.get('group') as ExerciseFilter['group']) || null,
+      equip: searchParams.get('equip') || null,
+      pattern: (searchParams.get('pattern') as ExerciseFilter['pattern']) || null,
+      onlyCustom: searchParams.get('custom') === '1',
+    }),
+    [searchParams],
+  )
+  const setFilter = (patch: Partial<ExerciseFilter>) => {
+    const next = { ...filter, ...patch }
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev)
+        const put = (k: string, v: string | null) => (v ? sp.set(k, v) : sp.delete(k))
+        put('q', next.query || null)
+        put('group', next.group)
+        put('equip', next.equip)
+        put('pattern', next.pattern)
+        put('custom', next.onlyCustom ? '1' : null)
+        return sp
+      },
+      { replace: true },
+    )
+  }
   const [creating, setCreating] = useState(false)
 
   const exercises = useRxData<Exercise>((db) => db.exercises.find(), [])
@@ -216,12 +406,8 @@ function ExercisesList() {
 
   const customIds = useMemo(() => new Set(custom.map((c) => c.id)), [custom])
   const all = useMemo(() => [...custom.map(customToExercise), ...exercises], [custom, exercises])
-
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const pool = q ? all.filter((e) => e.name.toLowerCase().includes(q)) : all
-    return [...pool].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 60)
-  }, [all, query])
+  const equipmentOptions = useMemo(() => equipmentOptionsOf(all, prefs.customEquipment), [all, prefs.customEquipment])
+  const matches = useMemo(() => filterExercises(all, filter, customIds), [all, filter, customIds])
 
   return (
     <div className="mt-4">
@@ -231,10 +417,14 @@ function ExercisesList() {
         autoComplete="off"
         aria-label="Search exercises"
         placeholder="Bench, squat, curl…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        value={filter.query}
+        onChange={(e) => setFilter({ query: e.target.value })}
         className="w-full rounded-xl border border-steel-700 bg-steel-900 px-4 py-3 text-base text-chalk placeholder:text-steel-600 focus-visible:border-amber focus-visible:outline-none"
       />
+
+      {/* Shared filter chips: one active muscle group + one equipment type + custom, combined with search. */}
+      <ExerciseFilters filter={filter} setFilter={setFilter} equipmentOptions={equipmentOptions} />
+
       <button
         type="button"
         onClick={() => setCreating(true)}
@@ -263,7 +453,7 @@ function ExercisesList() {
 
       {creating && (
         <CreateCustomExercise
-          initialName={query}
+          initialName={filter.query}
           onCreated={(id) => navigate(`/app/exercises/${encodeURIComponent(id)}`)}
           onClose={() => setCreating(false)}
         />
@@ -297,25 +487,53 @@ function StarterBrowser({
             </svg>
           </button>
         </div>
-        <ul className="flex-1 space-y-3 overflow-y-auto pb-5">
-          {starters.length === 0 && <li className="py-8 text-center text-sm text-fog">Loading…</li>}
-          {starters.map((s) => (
-            <li key={s.id} className="rounded-2xl border border-steel-800 bg-steel-900 p-4">
-              <div className="flex items-center gap-2">
-                <span className="flex-1 font-display text-lg font-bold">{s.name}</span>
-                <button
-                  type="button"
-                  onClick={() => onAdopt(s)}
-                  className="rounded-lg bg-amber px-4 py-2 text-sm font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright"
-                >
-                  Adopt
-                </button>
-              </div>
-              <p className="mt-1 text-sm text-fog">{s.days.map((d) => d.label).join(' · ')}</p>
-            </li>
-          ))}
-        </ul>
+        <div className="flex-1 space-y-6 overflow-y-auto pb-5">
+          {starters.length === 0 && <p className="py-8 text-center text-sm text-fog">Loading…</p>}
+          {GOAL_ORDER.map((g) => {
+            const group = starters.filter((s) => s.goal === g)
+            if (group.length === 0) return null
+            return (
+              <section key={g}>
+                <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-amber">{GOAL_LABEL[g]}</h3>
+                <ul className="space-y-3">
+                  {group.map((s) => (
+                    <StarterCard key={s.id} starter={s} onAdopt={onAdopt} />
+                  ))}
+                </ul>
+              </section>
+            )
+          })}
+        </div>
       </div>
     </div>
+  )
+}
+
+// One starter card: name + 2–3 line description + day labels, plus a "timed circuit" hint when the
+// plan has an interval day (M8.3).
+function StarterCard({ starter, onAdopt }: { starter: Starter; onAdopt: (s: Starter) => void }) {
+  const circuit = starter.days.find((d) => d.mode === 'circuit')
+  return (
+    <li className="rounded-2xl border border-steel-800 bg-steel-900 p-4">
+      <div className="flex items-start gap-2">
+        <span className="flex-1 font-display text-lg font-bold">{starter.name}</span>
+        <button
+          type="button"
+          onClick={() => onAdopt(starter)}
+          className="shrink-0 rounded-lg bg-amber px-4 py-2 text-sm font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright"
+        >
+          Adopt
+        </button>
+      </div>
+      <p className="mt-1.5 text-sm leading-relaxed text-fog">{starter.description}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+        <span className="text-steel-500">{starter.days.map((d) => d.label).join(' · ')}</span>
+        {circuit && (
+          <span className="nums rounded bg-amber/15 px-1.5 py-0.5 font-bold text-amber">
+            timed · {circuit.workSec}s/{circuit.restSec}s ×{circuit.rounds}
+          </span>
+        )}
+      </div>
+    </li>
   )
 }

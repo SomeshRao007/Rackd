@@ -91,7 +91,7 @@ export function PlannedExerciseRow({
           </svg>
         </button>
         <div className="pr-2">
-          <ExerciseInfoLink exerciseId={pick.exerciseId} label={pick.exerciseName} />
+          <ExerciseInfoLink exerciseId={pick.exerciseId} label={pick.exerciseName} showText />
         </div>
       </div>
 

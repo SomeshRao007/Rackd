@@ -4,7 +4,8 @@ import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import type { Exercise, SetLog, CustomExercise } from '../db/schema'
 import { BodyMap } from '../components/BodyMap'
-import { customToExercise } from '../db/customExercises'
+import { CreateCustomExercise } from '../components/CreateCustomExercise'
+import { customToExercise, deleteCustomExercise } from '../db/customExercises'
 import { useUnit, formatWeight, type Unit } from '../lib/units'
 import { epley1RM } from '../lib/lifting'
 
@@ -14,6 +15,10 @@ import { epley1RM } from '../lib/lifting'
 // /app/exercises/:id.
 type Tab = 'instructions' | 'records'
 
+// ExerciseDB animations are hotlinked (online-only) — see scripts/seed-catalog.ts. We degrade
+// gracefully: GIF → static demo image → nothing (the body-map below always renders regardless).
+const GIF_BASE = 'https://static.exercisedb.dev/media/'
+
 export function ExerciseDetail() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
@@ -21,11 +26,13 @@ export function ExerciseDetail() {
   const userId = user?.id ?? ''
   const unit = useUnit()
   const [tab, setTab] = useState<Tab>('instructions')
+  const [editing, setEditing] = useState(false)
 
   // Unified lookup: catalog first, then the user's custom exercises (ids never collide — slug vs UUID).
   const found = useRxData<Exercise>((db) => db.exercises.find({ selector: { id } }), [id])
   const foundCustom = useRxData<CustomExercise>((db) => db.customexercises.find({ selector: { id } }), [id])
   const ex = found[0] ?? (foundCustom[0] ? customToExercise(foundCustom[0]) : null)
+  const isCustom = !!foundCustom[0] && !found[0] // only the user's own lifts are editable/deletable
 
   const sets = useRxData<SetLog>(
     (db) => db.setlogs.find({ selector: { userId, exerciseId: id, deletedAt: null }, sort: [{ createdAt: 'desc' }] }),
@@ -52,6 +59,16 @@ export function ExerciseDetail() {
           <h1 className="font-display text-3xl font-black tracking-tight">{ex.name}</h1>
           {ex.equipment && <p className="mt-1 text-sm capitalize text-fog">{ex.equipment}</p>}
 
+          {isCustom && (
+            <CustomActions
+              id={id}
+              onEdit={() => setEditing(true)}
+              onDeleted={() => navigate('/app/plans?tab=exercises', { replace: true })}
+            />
+          )}
+
+          <ExerciseVisual gifId={ex.gifId ?? null} images={ex.images ?? []} name={ex.name} />
+
           <div className="mt-4">
             <BodyMap highlight={{ primary: ex.primaryMuscles, secondary: ex.secondaryMuscles }} />
           </div>
@@ -74,9 +91,93 @@ export function ExerciseDetail() {
           </div>
 
           {tab === 'instructions' ? <Instructions ex={ex} /> : <Records sets={sets} unit={unit} />}
+
+          {editing && (
+            <CreateCustomExercise edit={ex} onCreated={() => setEditing(false)} onClose={() => setEditing(false)} />
+          )}
         </>
       )}
     </section>
+  )
+}
+
+// Edit / delete for a user's own custom exercise. Delete asks for inline confirmation first
+// (soft-delete tombstone via deleteCustomExercise), then leaves for the Exercises library.
+function CustomActions({ id, onEdit, onDeleted }: { id: string; onEdit: () => void; onDeleted: () => void }) {
+  const [confirm, setConfirm] = useState(false)
+
+  if (confirm) {
+    return (
+      <div className="mt-3 flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2">
+        <span className="flex-1 text-sm font-semibold text-chalk">Delete this custom exercise?</span>
+        <button
+          type="button"
+          onClick={() => { void deleteCustomExercise(id); onDeleted() }}
+          className="rounded-lg bg-red-500 px-3 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-red-400"
+        >
+          Delete
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirm(false)}
+          className="rounded-lg bg-steel-800 px-3 py-1.5 text-sm font-bold text-fog transition-colors hover:text-chalk"
+        >
+          Cancel
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-3 flex gap-2">
+      <button
+        type="button"
+        onClick={onEdit}
+        className="rounded-lg bg-steel-800 px-4 py-1.5 text-sm font-bold text-fog transition-colors hover:bg-amber hover:text-ink"
+      >
+        Edit
+      </button>
+      <button
+        type="button"
+        onClick={() => setConfirm(true)}
+        className="rounded-lg bg-steel-800 px-4 py-1.5 text-sm font-bold text-fog transition-colors hover:bg-red-500 hover:text-ink"
+      >
+        Delete
+      </button>
+    </div>
+  )
+}
+
+// GIF first, then the static demo image, then nothing. Advances on load error, so an offline /
+// throttled / missing animation quietly falls back instead of showing a broken image.
+function ExerciseVisual({ gifId, images, name }: { gifId: string | null; images: string[]; name: string }) {
+  const sources = useMemo(
+    () => [gifId ? { url: GIF_BASE + gifId + '.gif', animated: true } : null, ...images.map((url) => ({ url, animated: false }))]
+      .filter((x): x is { url: string; animated: boolean } => !!x),
+    [gifId, images],
+  )
+  const [i, setI] = useState(0)
+  const current = sources[i]
+  if (!current) return null
+
+  return (
+    <figure className="mt-4">
+      <div className="grid aspect-square w-full place-items-center overflow-hidden rounded-2xl bg-steel-900">
+        <img
+          key={current.url}
+          src={current.url}
+          alt={`${name} demonstration`}
+          loading="lazy"
+          onError={() => setI((n) => n + 1)}
+          className="h-full w-full object-contain"
+        />
+      </div>
+      {current.animated && (
+        <figcaption className="mt-1.5 text-right text-[0.65rem] uppercase tracking-wide text-steel-600">
+          Animation: ExerciseDB
+        </figcaption>
+      )}
+    </figure>
   )
 }
 

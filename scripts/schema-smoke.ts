@@ -30,10 +30,18 @@ const db = await createRxDatabase<WorkoutDatabase>({
   storage: wrappedValidateAjvStorage({ storage: getRxStorageMemory() }),
 })
 await db.addCollections({
-  exercises: { schema: exerciseSchema },
+  exercises: {
+    schema: exerciseSchema,
+    // v0→v1 added the nullable gifId (M8.1) — dev-mode requires the strategy for the bumped version.
+    migrationStrategies: { 1: (doc) => ({ ...doc, gifId: null }) },
+  },
   sessions: {
     schema: sessionSchema,
-    migrationStrategies: { 1: (doc) => ({ ...doc, plannedDay: null }) },
+    // mirror database.ts: v1 added plannedDay (M3), v2 added finishedAt (M8.2).
+    migrationStrategies: {
+      1: (doc) => ({ ...doc, plannedDay: null }),
+      2: (doc) => ({ ...doc, finishedAt: null }),
+    },
   },
   setlogs: {
     schema: setLogSchema,
@@ -41,7 +49,11 @@ await db.addCollections({
   },
   plans: {
     schema: planSchema,
-    migrationStrategies: { 1: (doc) => ({ ...doc, scheme: null }) },
+    // mirror database.ts: v1 added scheme (M5), v2 added enrollment fields (M8.2).
+    migrationStrategies: {
+      1: (doc) => ({ ...doc, scheme: null }),
+      2: (doc) => ({ ...doc, enrolledAt: null, schedule: null }),
+    },
   },
   exclusions: { schema: exclusionSchema },
   goals: { schema: goalSchema },

@@ -8,10 +8,10 @@ import {
 
 // Every per-user record carries sync metadata: id (client UUID), userId (isolation boundary), createdAt/updatedAt (ISO; lexicographic compare = LWW key), deletedAt (soft-delete tombstone, null = live).
 
-// ── Exercise (catalog, read-only; seeded from free-exercise-db) ──────────────
+// ── Exercise (catalog, read-only; seeded from free-exercise-db + ExerciseDB) ──
 const exerciseSchemaLiteral = {
   title: 'exercise',
-  version: 0,
+  version: 1, // v0→v1: added nullable gifId (M8.1 — ExerciseDB animation reference)
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -26,6 +26,8 @@ const exerciseSchemaLiteral = {
     force: { type: 'string' },
     instructions: { type: 'array', items: { type: 'string' } },
     images: { type: 'array', items: { type: 'string' } },
+    // ExerciseDB media id → animated GIF at static.exercisedb.dev/media/{gifId}.gif (hotlinked, online-only).
+    gifId: { type: ['string', 'null'] },
     source: { type: 'string' },
     license: { type: 'string' },
   },
@@ -37,9 +39,10 @@ export const exerciseSchema: RxJsonSchema<Exercise> = exerciseSchemaLiteral
 
 // ── Session (per-user; one workout instance) ─────────────────────────────────
 // plannedDay (v1): the locked plan day, stored as a JSON string so it rides the flat-column /sync handler unchanged.
+// finishedAt (v2, M8.2): explicit "Finish workout" stamp — green calendar days + rotation advance count only finished sessions.
 const sessionSchemaLiteral = {
   title: 'session',
-  version: 1,
+  version: 2,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -48,6 +51,7 @@ const sessionSchemaLiteral = {
     date: { type: 'string', maxLength: 10 }, // YYYY-MM-DD
     title: { type: 'string' },
     plannedDay: { type: ['string', 'null'] },
+    finishedAt: { type: ['string', 'null'] },
     createdAt: { type: 'string' },
     updatedAt: { type: 'string' },
     deletedAt: { type: ['string', 'null'] },
@@ -101,9 +105,11 @@ export const setLogSchema: RxJsonSchema<SetLog> = setLogSchemaLiteral
 
 // ── Plan (per-user; named workout plan, the first freely-editable LWW record) ─
 // `days` is a JSON STRING (not nested) so the plan syncs through the flat /sync handler unchanged; sourceShareCode records share/starter provenance.
+// Enrollment (v2, M8.2): enrolledAt non-null = THE active plan (one at a time; enrollPlan clears others);
+// schedule is a JSON string { start: 'YYYY-MM-DD', weekdays: number[] } — weekdays are Date.getDay() 0–6.
 const planSchemaLiteral = {
   title: 'plan',
-  version: 1,
+  version: 2,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -113,6 +119,8 @@ const planSchemaLiteral = {
     days: { type: 'string' },
     sourceShareCode: { type: ['string', 'null'] },
     scheme: { type: ['string', 'null'] }, // per-plan progression scheme (M5); null = double default
+    enrolledAt: { type: ['string', 'null'] },
+    schedule: { type: ['string', 'null'] },
     createdAt: { type: 'string' },
     updatedAt: { type: 'string' },
     deletedAt: { type: ['string', 'null'] },
@@ -264,8 +272,20 @@ export type CustomExercise = ExtractDocumentTypeFromTypedRxJsonSchema<typeof cus
 export const customExerciseSchema: RxJsonSchema<CustomExercise> = customExerciseSchemaLiteral
 
 // Parsed `days` shapes — the in-memory contract for the builder + rotation.
-export type PlanSlot = { id: string; label: string; exercisePool: string[] }
-export type PlanDay = { id: string; label: string; slots: PlanSlot[] }
+// Circuit timing (M8.3): a day with mode 'circuit' runs its slots as timed stations — `rounds`
+// passes through the day, `workSec` on / `restSec` off (a slot's own workSec overrides the day's,
+// e.g. a mobility hold). These are the plan's station timings, distinct from the budget-estimate
+// workSec/restSec prefs in src/lib/prefs.ts. Absent/`strength` → the classic weight×reps loggers.
+export type PlanSlot = { id: string; label: string; exercisePool: string[]; workSec?: number }
+export type PlanDay = {
+  id: string
+  label: string
+  slots: PlanSlot[]
+  mode?: 'strength' | 'circuit'
+  workSec?: number
+  restSec?: number
+  rounds?: number
+}
 export type PlannedPick = {
   slotId: string
   slotLabel: string
@@ -291,6 +311,10 @@ export type PlannedDay = {
   cooldown?: MobilityStep[]
   scheme?: SchemeId // progression scheme snapshotted at lock time (M5)
   deload?: boolean // locked day accepted as a deload — the stateless deload history (M5)
+  mode?: 'strength' | 'circuit' // circuit → Today renders the timed CircuitTimer, not loggers (M8.3)
+  workSec?: number // circuit: seconds of work per station
+  restSec?: number // circuit: seconds of rest between stations
+  rounds?: number // circuit: passes through the day's stations
 }
 
 // ── Collection + database types (the contract subagents import) ──────────────

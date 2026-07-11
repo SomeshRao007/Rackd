@@ -5,6 +5,7 @@ type Env = {
   GOOGLE_CLIENT_ID: string
   GOOGLE_CLIENT_SECRET: string
   JWT_SECRET: string
+  DB: D1Database
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
@@ -55,13 +56,36 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const claims = decodeJwt(id_token)
   if (typeof claims.sub !== 'string') return fail()
 
+  const sub = claims.sub
+  const googleName = claims.name as string | undefined
+  const googleEmail = (claims.email as string | undefined)?.toLowerCase()
+  const picture = claims.picture as string | undefined
+
+  // Ensure a local users row so name + dob persist and stay editable like a password account.
+  // Prefer the local row's name/dob over Google's claims so account-settings edits stick across logins.
+  let name = googleName
+  let dob: string | undefined
+  const existing = await env.DB.prepare('SELECT name, dob FROM users WHERE id = ?1')
+    .bind(sub)
+    .first<{ name: string | null; dob: string | null }>()
+  if (existing) {
+    name = existing.name ?? googleName
+    dob = existing.dob ?? undefined
+  } else if (googleEmail) {
+    // First Google login → create the row. A rare email collision with a pre-existing password
+    // account (different id) throws on UNIQUE(email); swallow it and fall back to Google claims
+    // (identity-merge is out of scope).
+    try {
+      await env.DB.prepare('INSERT INTO users (id, email, passwordHash, name, dob, createdAt) VALUES (?1, ?2, NULL, ?3, NULL, ?4)')
+        .bind(sub, googleEmail, googleName ?? null, new Date().toISOString())
+        .run()
+    } catch {
+      // proceed with Google claims for this session
+    }
+  }
+
   const appJwt = await mintAppJwt(
-    {
-      sub: claims.sub,
-      name: claims.name as string | undefined,
-      email: claims.email as string | undefined,
-      picture: claims.picture as string | undefined,
-    },
+    { sub, name, email: googleEmail, picture, dob, provider: 'google' },
     env.JWT_SECRET,
   )
 

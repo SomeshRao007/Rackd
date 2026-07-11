@@ -3,6 +3,7 @@ import { getOrCreateTodaySession, lastSetFor } from './actions'
 import { getPrefs, equipmentAvailable } from '../lib/prefs'
 import { activeExclusions } from './exclusions'
 import type { Plan, PlanDay, PlannedDay, PlannedPick, Exercise, SchemeId } from './schema'
+import type { PlanSchedule } from '../lib/schedule'
 
 const now = () => new Date().toISOString()
 
@@ -33,6 +34,8 @@ export async function createPlan(userId: string, name: string): Promise<Plan> {
     name,
     days: '[]',
     sourceShareCode: null,
+    enrolledAt: null,
+    schedule: null,
     createdAt: ts,
     updatedAt: ts,
     deletedAt: null,
@@ -48,6 +51,32 @@ export async function updatePlan(
   const db = await getDb()
   const doc = await db.plans.findOne(id).exec()
   if (doc) await doc.patch({ ...patch, updatedAt: now() })
+}
+
+// Enroll (M8.2): one active plan at a time — clearing the others' enrolledAt keeps "the enrolled
+// plan" a simple findOne everywhere; each patch bumps updatedAt so the change syncs via LWW.
+// Note: `enrolledAt: { $ne: null }` selectors don't match under the Dexie storage (they silently
+// return nothing, so the clear-loop no-oped and left two plans enrolled). Query plainly and filter
+// enrolledAt in JS — the pattern Plans.tsx already uses reliably on the same data.
+export async function enrollPlan(
+  userId: string,
+  planId: string,
+  schedule: PlanSchedule,
+): Promise<void> {
+  const db = await getDb()
+  const userPlans = await db.plans.find({ selector: { userId, deletedAt: null } }).exec()
+  for (const doc of userPlans) {
+    if (doc.id !== planId && doc.enrolledAt != null)
+      await doc.patch({ enrolledAt: null, schedule: null, updatedAt: now() })
+  }
+  const doc = await db.plans.findOne(planId).exec()
+  if (doc) await doc.patch({ enrolledAt: now(), schedule: JSON.stringify(schedule), updatedAt: now() })
+}
+
+export async function unenrollPlan(planId: string): Promise<void> {
+  const db = await getDb()
+  const doc = await db.plans.findOne(planId).exec()
+  if (doc) await doc.patch({ enrolledAt: null, schedule: null, updatedAt: now() })
 }
 
 /** Soft-delete (tombstone, so the delete syncs). */
@@ -70,6 +99,8 @@ export async function adoptPlan(
     name: snapshot.name,
     days: typeof snapshot.days === 'string' ? snapshot.days : JSON.stringify(snapshot.days),
     sourceShareCode: snapshot.shareCode ?? null,
+    enrolledAt: null,
+    schedule: null,
     createdAt: ts,
     updatedAt: ts,
     deletedAt: null,
@@ -131,12 +162,18 @@ export async function resolveDay(
       ...(unavailable ? { unavailable: true } : {}),
     })
   }
+  // Circuit days (M8.3) carry their timing so Today renders the timer instead of set loggers.
+  const circuit =
+    day.mode === 'circuit'
+      ? { mode: 'circuit' as const, workSec: day.workSec, restSec: day.restSec, rounds: day.rounds }
+      : {}
   return {
     planId: plan.id,
     dayId,
     label: day.label,
     scheme: (plan.scheme as SchemeId) ?? 'double',
     picks,
+    ...circuit,
     ...deriveMobility(day, picks, exMap),
   }
 }
