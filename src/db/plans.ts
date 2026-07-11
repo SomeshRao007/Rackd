@@ -4,6 +4,7 @@ import { getPrefs, equipmentAvailable } from '../lib/prefs'
 import { activeExclusions } from './exclusions'
 import type { Plan, PlanDay, PlannedDay, PlannedPick, Exercise, SchemeId } from './schema'
 import type { PlanSchedule } from '../lib/schedule'
+import { groupOf, GROUP_LABELS, type MuscleGroupId } from '../lib/muscles'
 
 const now = () => new Date().toISOString()
 
@@ -22,6 +23,23 @@ export function pickLeastRecent(
     }
   }
   return best
+}
+
+// Auto-match a plan day for a goal-suggested exercise (M6 R6 "ADD"): the day whose slots already
+// train `group` the most, so a hypertrophy volume add lands where that muscle already lives. Circuit
+// days (M8.3 timed stations) are excluded so a strength add doesn't silently become a timed station;
+// ties / no-match resolve to the first candidate (strict `>`, like pickLeastRecent). Pure — no DB.
+export function pickPlanDayForGroup(
+  days: PlanDay[],
+  groupById: Map<string, MuscleGroupId | undefined>,
+  group: MuscleGroupId,
+): PlanDay | null {
+  if (days.length === 0) return null
+  const candidates = days.filter((d) => d.mode !== 'circuit')
+  const pool = candidates.length ? candidates : days
+  const scoreOf = (d: PlanDay): number =>
+    d.slots.reduce((n, s) => n + s.exercisePool.filter((id) => groupById.get(id) === group).length, 0)
+  return pool.reduce((best, d) => (scoreOf(d) > scoreOf(best) ? d : best), pool[0])
 }
 
 // ── CRUD (plans are the first freely-editable LWW record; patch bumps updatedAt) ─
@@ -77,6 +95,41 @@ export async function unenrollPlan(planId: string): Promise<void> {
   const db = await getDb()
   const doc = await db.plans.findOne(planId).exec()
   if (doc) await doc.patch({ enrolledAt: null, schedule: null, updatedAt: now() })
+}
+
+export type AddToPlanResult =
+  | { ok: true; dayLabel: string }
+  | { ok: false; reason: 'no-plan' | 'no-days' | 'duplicate' }
+
+// Append a goal-suggested exercise to the enrolled plan as a new single-exercise slot (M6 R6 "ADD"),
+// on the auto-matched day (pickPlanDayForGroup) — a fresh slot (not a rotation-pool append) so the
+// exercise shows up every time that day runs, mirroring saveAddedPickToPlan. One enrolled plan at a
+// time, queried plainly then filtered in JS (Dexie `$ne: null` gotcha). Idempotent: an exercise
+// already anywhere in the plan returns 'duplicate' rather than a second copy.
+export async function addExerciseToEnrolledPlan(
+  userId: string,
+  exerciseId: string,
+  group: MuscleGroupId,
+): Promise<AddToPlanResult> {
+  const db = await getDb()
+  const userPlans = await db.plans.find({ selector: { userId, deletedAt: null } }).exec()
+  const enrolled = userPlans.find((p) => p.enrolledAt != null)
+  if (!enrolled) return { ok: false, reason: 'no-plan' }
+
+  const days = JSON.parse(enrolled.days) as PlanDay[]
+  if (days.length === 0) return { ok: false, reason: 'no-days' }
+  if (days.some((d) => d.slots.some((s) => s.exercisePool.includes(exerciseId))))
+    return { ok: false, reason: 'duplicate' }
+
+  const exs = (await db.exercises.find().exec()).map((e) => e.toJSON() as Exercise)
+  const groupById = new Map(exs.map((e) => [e.id, groupOf(e.primaryMuscles[0])]))
+  const target = pickPlanDayForGroup(days, groupById, group)
+  if (!target) return { ok: false, reason: 'no-days' }
+
+  const name = exs.find((e) => e.id === exerciseId)?.name
+  target.slots.push({ id: crypto.randomUUID(), label: name ?? GROUP_LABELS[group], exercisePool: [exerciseId] })
+  await updatePlan(enrolled.id, { days: JSON.stringify(days) })
+  return { ok: true, dayLabel: target.label }
 }
 
 /** Soft-delete (tombstone, so the delete syncs). */

@@ -8,6 +8,7 @@ import { GOAL_TYPES, goalProgress, priorClosedGoal, goalTypeLabel, type GoalType
 import {
   createGoal, closeGoal, goalCurrentValue, goalSuggestionsFor, type ResolvedSuggestion,
 } from '../../db/goals'
+import { addExerciseToEnrolledPlan } from '../../db/plans'
 import { latestMetric } from '../../db/metrics'
 import { ExercisePicker } from '../../components/ExercisePicker'
 
@@ -30,6 +31,7 @@ function ActiveGoal({ goal }: { goal: Goal }) {
   const unit = useUnit()
   const [current, setCurrent] = useState(0)
   const [suggestions, setSuggestions] = useState<ResolvedSuggestion[]>([])
+  const [added, setAdded] = useState<Set<string>>(new Set())
   const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
@@ -45,9 +47,21 @@ function ActiveGoal({ goal }: { goal: Goal }) {
     return () => clearTimeout(t)
   }, [notice])
 
-  // ponytail: ADD shows a toast for now; wiring it to a plan is deferred (m6-deferred.md #6).
-  function handleAdd(s: ResolvedSuggestion) {
-    setNotice(`“${s.suggestedExerciseName ?? 'Exercise'}” — add-to-plan is coming soon. Add it from the Plans tab for now.`)
+  // Append the suggested exercise to the enrolled plan's auto-matched day (M6 R6). The suggestion is
+  // volume-derived (logged sets), so it persists after adding — flip the chip to "Added" to avoid a
+  // confusing re-tap until the user actually trains it.
+  async function handleAdd(s: ResolvedSuggestion) {
+    const exId = s.suggestedExerciseId
+    if (!exId) return
+    const name = s.suggestedExerciseName ?? 'Exercise'
+    const res = await addExerciseToEnrolledPlan(goal.userId, exId, s.group)
+    if (res.ok || res.reason === 'duplicate') setAdded((prev) => new Set(prev).add(exId))
+    setNotice(
+      res.ok ? `Added “${name}” to ${res.dayLabel}.`
+        : res.reason === 'duplicate' ? `“${name}” is already in your plan.`
+        : res.reason === 'no-plan' ? 'Enroll a plan first (Plans tab) to add exercises.'
+        : 'Your enrolled plan has no days yet — add one in the Plans tab.',
+    )
   }
 
   const pct = goalProgress(goal, current)
@@ -97,7 +111,11 @@ function ActiveGoal({ goal }: { goal: Goal }) {
             {suggestions.map((s) => (
               <li key={s.group} className="rounded-xl bg-steel-900 px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <ActionChip action={s.action} onClick={s.action === 'add' ? () => handleAdd(s) : undefined} />
+                  {s.suggestedExerciseId && added.has(s.suggestedExerciseId) ? (
+                    <span className="rounded-md bg-steel-800 px-2 py-0.5 text-xs font-bold uppercase text-amber">Added ✓</span>
+                  ) : (
+                    <ActionChip action={s.action} onClick={s.action === 'add' ? () => handleAdd(s) : undefined} />
+                  )}
                   <span className="text-sm text-chalk">{s.reason}</span>
                 </div>
                 {s.suggestedExerciseName && (
