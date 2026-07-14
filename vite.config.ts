@@ -20,7 +20,12 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       // Pull the Web Push handlers (public/push-sw.js) into the generated SW without leaving generateSW (M7).
-      workbox: { importScripts: ['push-sw.js'] },
+      // Let server-route navigations (Google OAuth login/callback + sync/share/push) reach the
+      // Cloudflare Functions instead of being caught by the SPA navigateFallback (index.html).
+      workbox: {
+        importScripts: ['push-sw.js'],
+        navigateFallbackDenylist: [/^\/auth\//, /^\/sync\//, /^\/share\//, /^\/push\//],
+      },
       manifest: {
         name: 'Rackd — Workout Tracker',
         short_name: 'Rackd',
