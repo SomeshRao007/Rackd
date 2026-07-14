@@ -12,5 +12,5 @@ pages_build_output_dir = "dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "workout-db"
-database_id = "local-placeholder-set-on-deploy"
+database_id = "793f3985-b447-4e69-8d17-42fb27cd25f6"
 migrations_dir = "migrations"
