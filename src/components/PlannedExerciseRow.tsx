@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRxData } from '../db/useRxData'
-import type { SetLog, PlannedPick, SchemeId } from '../db/schema'
+import type { Exercise, SetLog, PlannedPick, SchemeId } from '../db/schema'
 import { logSet, suggestFor, deleteSet } from '../db/actions'
 import { setPickMinSets, setPickExercise, saveAddedPickToPlan } from '../db/plans'
+import { suggestAlternatives } from '../lib/substitute'
 import { addExclusion } from '../db/exclusions'
 import { warmupSets, platesFor } from '../lib/lifting'
 import { usePrefs, setBarKg } from '../lib/prefs'
@@ -24,6 +25,7 @@ export function PlannedExerciseRow({
   nameOf,
   muscleOf,
   equipmentOf,
+  catalog,
 }: {
   pick: PlannedPick
   sessionId: string
@@ -33,6 +35,7 @@ export function PlannedExerciseRow({
   nameOf: Map<string, string>
   muscleOf: Map<string, string>
   equipmentOf: Map<string, string>
+  catalog: Exercise[]
 }) {
   const unit = useUnit()
   const [open, setOpen] = useState(false)
@@ -74,6 +77,7 @@ export function PlannedExerciseRow({
             <span className="block truncate font-semibold">{pick.exerciseName}</span>
             <span className="text-xs uppercase tracking-wide text-fog">
               {pick.slotLabel}
+              {pick.substituted && <span className="text-amber"> · subbed for your kit</span>}
               {min > 0 && ` · ${sets.length}/${min} sets`}
               {pick.targetReps ? ` · ${pick.targetReps} reps` : ''}
             </span>
@@ -108,6 +112,7 @@ export function PlannedExerciseRow({
           nameOf={nameOf}
           muscleOf={muscleOf}
           equipmentOf={equipmentOf}
+          catalog={catalog}
         />
       )}
     </li>
@@ -128,6 +133,7 @@ function InlineLogger({
   nameOf,
   muscleOf,
   equipmentOf,
+  catalog,
 }: {
   pick: PlannedPick
   sessionId: string
@@ -140,6 +146,7 @@ function InlineLogger({
   nameOf: Map<string, string>
   muscleOf: Map<string, string>
   equipmentOf: Map<string, string>
+  catalog: Exercise[]
 }) {
   const [minSets, setMinSets] = useState(initialMin ? String(initialMin) : '')
   const [weight, setWeight] = useState('')
@@ -150,8 +157,17 @@ function InlineLogger({
   const [note, setNote] = useState('')
   const [panel, setPanel] = useState<Panel>('none')
   const [restedMsg, setRestedMsg] = useState('')
-  const { barKg } = usePrefs()
+  const { barKg, equipment } = usePrefs()
   const repsRef = useRef<HTMLInputElement>(null)
+
+  // Same-muscle catalog alternatives doable with the user's kit. Ranked against the POOL (not the
+  // current pick) so the list stays stable when you swap onto one of its entries.
+  const alts = useMemo(() => {
+    if (!pick.pool) return []
+    const byId = new Map(catalog.map((e) => [e.id, e]))
+    const poolExs = pick.pool.map((id) => byId.get(id)).filter((e) => e !== undefined)
+    return suggestAlternatives(poolExs, catalog, equipment, new Set(pick.pool))
+  }, [pick.pool, catalog, equipment])
 
   // Seed once from the progression engine (M5); async .then → not a sync setState-in-effect.
   useEffect(() => {
@@ -209,7 +225,9 @@ function InlineLogger({
     <div className="border-t border-steel-800 px-4 pb-4 pt-3">
       {/* Toolbar: swap exercise / plate math / rest this / save-to-plan (M4) */}
       <div className="mb-3 flex gap-2 text-xs font-bold uppercase tracking-wide">
-        {pick.pool && pick.pool.length > 1 && <Tool active={panel === 'swap'} onClick={() => toggle('swap')}>Swap</Tool>}
+        {pick.pool && (pick.pool.length > 1 || alts.length > 0) && (
+          <Tool active={panel === 'swap'} onClick={() => toggle('swap')}>Swap</Tool>
+        )}
         {plateLoaded && <Tool active={panel === 'plates'} onClick={() => toggle('plates')}>Plates</Tool>}
         <Tool active={panel === 'rest'} onClick={() => toggle('rest')}>Rest</Tool>
         {pick.added && (
@@ -228,21 +246,32 @@ function InlineLogger({
       </div>
 
       {panel === 'swap' && pick.pool && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          {pick.pool.map((exId) => {
-            const active = exId === pick.exerciseId
-            return (
-              <button
+        <div className="mb-3">
+          <div className="flex flex-wrap gap-2">
+            {pick.pool.map((exId) => (
+              <SwapChip
                 key={exId}
-                type="button"
+                active={exId === pick.exerciseId}
+                label={nameOf.get(exId) ?? exId}
                 onClick={() => void setPickExercise(sessionId, pick.slotId, exId)}
-                aria-pressed={active}
-                className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${active ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'}`}
-              >
-                {nameOf.get(exId) ?? exId}
-              </button>
-            )
-          })}
+              />
+            ))}
+          </div>
+          {alts.length > 0 && (
+            <>
+              <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-fog">More with your kit</p>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {alts.map((e) => (
+                  <SwapChip
+                    key={e.id}
+                    active={e.id === pick.exerciseId}
+                    label={e.name}
+                    onClick={() => void setPickExercise(sessionId, pick.slotId, e.id)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -381,6 +410,19 @@ function InlineLogger({
         </ul>
       )}
     </div>
+  )
+}
+
+function SwapChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${active ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'}`}
+    >
+      {label}
+    </button>
   )
 }
 

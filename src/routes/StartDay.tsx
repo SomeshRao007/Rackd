@@ -120,10 +120,11 @@ export function StartDay() {
   }, [basePicks, exMap, prefs.budgetMin, mobMin, prefs.restSec, prefs.workSec, prefs.maxSets, deload, circuit])
 
   function swap(slotId: string, exerciseId: string) {
+    // A manual choice is no longer an auto-substitution — drop the "swapped for your kit" flag.
     setBasePicks((cur) =>
       cur.map((p) =>
         p.slotId === slotId
-          ? { ...p, exerciseId, exerciseName: nameOf.get(exerciseId) ?? exerciseId }
+          ? { ...p, exerciseId, exerciseName: nameOf.get(exerciseId) ?? exerciseId, substituted: undefined }
           : p,
       ),
     )
@@ -315,8 +316,11 @@ export function StartDay() {
                   {pick.unavailable && (
                     <p className="mt-1 text-xs font-semibold text-amber-dim">⚠ No available match (kit or rest) — showing all</p>
                   )}
+                  {pick.substituted && (
+                    <p className="mt-1 text-xs font-semibold text-amber-dim">↻ Swapped for your kit</p>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {slot?.exercisePool.map((exId) => {
+                    {(pick.pool ?? slot?.exercisePool)?.map((exId) => {
                       const active = exId === pick.exerciseId
                       return (
                         <button

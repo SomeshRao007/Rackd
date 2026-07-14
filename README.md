@@ -73,6 +73,11 @@ session. That part isn't built yet (see [Roadmap](#roadmap)).
   and circuit parameters (`workSec`, `restSec`, `rounds`) ride the existing plan JSON, no schema version bump needed. On Today, circuit days display a **CircuitTimer** — a work/rest countdown
   over stations (exercises) × rounds with visual progress ring and audio cues. Calendar modal now labels each scheduled training day with the enrolled plan-day name (e.g., "Upper", "Metabolic Burst"),
   giving a quick visual summary of the week ahead. `CATALOG_VERSION` bumped to 3 (clients re-seed on startup).
+  *M8.4: Equipment-aware exercise substitution.* When a plan contains barbell lifts but a user lacks a barbell, the app now offers automatic substitution. At enroll time or as a per-plan action,
+  "Use dumbbells instead" rewrites all barbell exercises to their dumbbell equivalents (225+ of 307 catalog barbells have matches, discovered via name-token Dice similarity + muscle/mechanic scoring).
+  Lifts without equivalents are kept as-is and reported in a green summary banner. During Start Day or Today, if a slot has no exercise matching the user's available equipment, the app auto-swaps
+  to a catalog equivalent and labels it "↻ Swapped for your kit", or "subbed" tag for visibility; manual swaps clear the label. Mid-workout swap panel ("More with your kit") now suggests up to 5
+  same-muscle-group catalog alternatives filtered to the user's available equipment, beyond the slot's authored pool. `PlannedPick` gains an optional `substituted` flag (no schema version bump).
 - **Post-M8 profile & account features** — Signup now captures name (required) and date of birth (optional). New migration `0011_user_profile.sql` adds `name` and `dob` columns to
   the `users` table and makes `passwordHash` nullable for Google-only accounts. The app JWT now carries `dob` and `provider` ('google' or 'password'). Google sign-in on first login
   upserts a local users row and prefers the local name/dob so profile edits persist. New `/auth/account` endpoint (POST, Bearer-authenticated) lets users edit name/dob (all accounts)
@@ -170,7 +175,7 @@ Never set it in production.
 **Tests:**
 ```bash
 npm run smoke   # RxDB schema sanity check (9 collections including M8 customexercises)
-npm run test    # suites: sync replication, rotation, generation, progression (M5), volume + goals (M6), readiness + consistency + PR + gamification (M7), custom-exercise classification (M8), exercise-filter patterns (M8), schedule + enrollment logic (M8.2), circuit timing (M8.3), lifting math
+npm run test    # suites: sync replication, rotation, generation, progression (M5), volume + goals (M6), readiness + consistency + PR + gamification (M7), custom-exercise classification (M8), exercise-filter patterns (M8), schedule + enrollment logic (M8.2), circuit timing (M8.3), lifting math, equipment substitution (M8.4)
 ```
 
 ## Using the app
@@ -184,11 +189,13 @@ npm run test    # suites: sync replication, rotation, generation, progression (M
    is adjustable to limit how many sets the budget algorithm assigns to any single exercise. Also manage temporary or permanent exclusions
    (rest a muscle group or specific exercise for a preset duration or forever) — useful for injury recovery or focusing on other body parts.
    An "Account" section at the bottom lets you edit your name and date of birth (both accounts), email and password (email-password accounts only; password change requires current password).
-3. **Plans** (M3, M5, M8.2–M8.3) — Build your own workout plan or adopt a starter plan. The starter-plan library includes 10 goal-tagged plans (muscle-growth, stay-active, weight-loss), each with a description, so you can pick one that matches your goal instead of starting from scratch.
+3. **Plans** (M3, M5, M8.2–M8.3, M8.4) — Build your own workout plan or adopt a starter plan. The starter-plan library includes 10 goal-tagged plans (muscle-growth, stay-active, weight-loss), each with a description, so you can pick one that matches your goal instead of starting from scratch.
    A plan defines "days" (e.g., Push, Pull, Legs), each with "slots" (e.g., Horizontal Push). Each slot holds an exercise pool. Days can be traditional strength-training or timed circuits (defining work/rest intervals and rounds).
    *Enroll* a plan (M8.2) by selecting a start date and your preferred training weekdays (Mon–Sun chips); the app will rotate plan days
    across your chosen weekdays. Enrolled plans show an ENROLLED badge and display "Trains Mon · Thu"-style summaries with an Unenroll action.
    An enrolled plan's days self-heal: if you skip a session, the rotation continues from the last finished workout, so the sequence stays consistent.
+   If a plan contains barbell lifts and you don't have a barbell, the Enroll dialog offers "Use dumbbells instead" (M8.4) — a one-tap opt-in that rewrites barbell exercises
+   to their dumbbell equivalents and reports unmatchable lifts in a green summary. The same "Use dumbbells instead" action is available on already-enrolled plan cards without re-enrolling.
    When you start a day, the app picks the least-recently-trained exercise from each pool,
    filtering out excluded exercises and unavailable equipment. You can preview and swap picks
    before locking the day. Share your plans with other users via a stable share code; they can
@@ -221,7 +228,7 @@ npm run test    # suites: sync replication, rotation, generation, progression (M
    visualizes your progress over time. The Body section header displays your name and computed age (from date of birth).
    *Recovery* (M7): your readiness trend, current training day streak (and best, forgiving up to 2 rest days
    between sessions), a nudge if you've been away long enough to lose progress, and goal-tied badges you've earned.
-6. **Today** (M8, M8.2–M8.3) — At the top, a greeting shows "Hey, {firstName}" using your account name. Below that, a CalendarStrip (M8.2) shows a horizontal month view with day chips: today highlighted in amber,
+6. **Today** (M8, M8.2–M8.3, M8.4) — At the top, a greeting shows "Hey, {firstName}" using your account name. Below that, a CalendarStrip (M8.2) shows a horizontal month view with day chips: today highlighted in amber,
    days with finished workouts in green, and scheduled training days marked with an amber dot. A button opens a full-month calendar modal
    with ‹ › month navigation, a legend, and each scheduled day labeled with its plan-day name (e.g., "Upper", "Metabolic Burst") so you can see the week ahead at a glance (M8.3).
    Below that, if you have an enrolled plan: on training days, a "Current plan" card (M8.2) displays the next few scheduled days as chips ("Thu 9 · Push") and a "Start {day} workout" button;
@@ -230,10 +237,11 @@ npm run test    # suites: sync replication, rotation, generation, progression (M
    warm-up sets (steps down from the last working weight), and a plate calculator (barbell plate stack per side; edit the bar weight in the calculator if your bar is not 20 kg).
    A labeled "Info" button on each exercise opens its detail page with instructions, worked muscles, and cross-session records. Tap a row to expand it, log weight × reps per set.
    Optionally log RIR (reps in reserve, 0–5 scale) and a per-set note for each set; these feed the progression engine and are shown in history.
+   If a slot has no exercise matching your available equipment (M8.4), the app auto-swaps to a catalog equivalent labeled "↻ Swapped for your kit"; manual swaps clear the label.
    For timed circuit days, a **CircuitTimer** (M8.3) displays a work/rest countdown with a visual progress ring over stations (exercises) × rounds, with audio cues. You move through each exercise
    during the work interval and rest between rounds.
    At the bottom of the workout, an explicit "Finish workout" button (M8.2) stamps the session as complete (`finishedAt`); the session stays open for logging extra sets after finishing.
-   Green calendar days and plan-rotation advancement count only finished workouts. Mid-workout actions: swap to a different exercise (drawing from your plan's pool),
+   Green calendar days and plan-rotation advancement count only finished workouts. Mid-workout actions: swap to a different exercise (drawing from your plan's pool or "More with your kit" catalog suggestions (M8.4) filtered to your available equipment and same muscle group),
    add a new exercise from the catalog (an "+ Add exercise" button at the bottom), or temporarily exclude an exercise or muscle group to rest. When you exclude an exercise
    ("Rest this lift" or "Rest {muscle}"), an inline confirmation appears explaining the exclusion takes effect on the next generated day (not the current session) and can be ended anytime
    in Settings. Ad-hoc exercises added mid-session can be saved to the plan so they recur next time. Rows turn green once you've logged the target number of sets.
@@ -258,7 +266,7 @@ In rough order, each one shippable on its own:
 | ✓ Progression & intensity (M5) | Per-plan progression schemes (double & linear), automatic weight + reps suggestion, RIR logging, 1RM estimation, break re-entry, deload detection. |
 | ✓ Goals & body tracking (M6) | Weight-loss, strength, and hypertrophy goals with progress bars and adaptive suggestions. Body weight + measurements tracking with trend sparkline. Volume-by-muscle-group dashboard over 7/14/30/365-day windows with drill-down and body-map overlay. |
 | ✓ Recovery, consistency & motivation (M7) | Daily recovery-readiness check-in that eases suggested load on run-down days; weekly training streaks + "cost of falling off" nudges; personal-record detection & celebration; goal-tied badges + per-session muscle micro-lessons; native Web Push reminder scaffold (delivery deploy-gated). |
-| ✓ Exercise intelligence & adaptive training (M8–M8.3) | Anatomical male/female muscle map (front/back, from MuscleMap) appearing on exercise cards and the Progress heatmap. Custom exercises with smart auto-classification: name → muscle tagging via keyword matching. Searchable exercise library with detail cards showing worked muscles, instructions, records, and animated GIFs (M8). Plan enrollment with rotating schedules: pick a start date and training weekdays, plan days auto-rotate with self-healing over missed sessions (M8.2). Calendar strip on Today showing month view with workout history and upcoming scheduled days; full-month modal labels each day with the plan name; explicit "Finish workout" button to mark sessions complete and advance rotation (M8.2). Curated goal-based starter-plan library (10 plans: 4 muscle-growth, 3 stay-active, 3 weight-loss) so users can adopt plans without building from scratch. Timed circuits: plan days can define work/rest intervals and rounds; a CircuitTimer component on Today displays a countdown with visual progress and audio cues (M8.3). |
+| ✓ Exercise intelligence & adaptive training (M8–M8.4) | Anatomical male/female muscle map (front/back, from MuscleMap) appearing on exercise cards and the Progress heatmap. Custom exercises with smart auto-classification: name → muscle tagging via keyword matching. Searchable exercise library with detail cards showing worked muscles, instructions, records, and animated GIFs (M8). Plan enrollment with rotating schedules: pick a start date and training weekdays, plan days auto-rotate with self-healing over missed sessions (M8.2). Calendar strip on Today showing month view with workout history and upcoming scheduled days; full-month modal labels each day with the plan name; explicit "Finish workout" button to mark sessions complete and advance rotation (M8.2). Curated goal-based starter-plan library (10 plans: 4 muscle-growth, 3 stay-active, 3 weight-loss) so users can adopt plans without building from scratch. Timed circuits: plan days can define work/rest intervals and rounds; a CircuitTimer component on Today displays a countdown with visual progress and audio cues (M8.3). Equipment-aware substitution: when a plan contains barbell lifts but a user lacks a barbell, an opt-in "Use dumbbells instead" rewrites exercises to dumbbell equivalents; auto-substitution during days when a slot matches no available equipment; swap suggestions ("More with your kit") filtered to same muscle group and available kit (M8.4). |
 | Optional AI layer | Bring your own AI key to improve plans/recommendations. Never required — the app works fully without it. |
 
 Nutrition tracking, wearable integrations, and AI form-checking are under consideration but

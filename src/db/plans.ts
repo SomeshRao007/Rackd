@@ -5,6 +5,7 @@ import { activeExclusions } from './exclusions'
 import type { Plan, PlanDay, PlannedDay, PlannedPick, Exercise, SchemeId } from './schema'
 import type { PlanSchedule } from '../lib/schedule'
 import { groupOf, GROUP_LABELS, type MuscleGroupId } from '../lib/muscles'
+import { findEquivalent, substituteInDays, type SubstitutionSummary } from '../lib/substitute'
 
 const now = () => new Date().toISOString()
 
@@ -95,6 +96,24 @@ export async function unenrollPlan(planId: string): Promise<void> {
   const db = await getDb()
   const doc = await db.plans.findOne(planId).exec()
   if (doc) await doc.patch({ enrolledAt: null, schedule: null, updatedAt: now() })
+}
+
+// Rewrite a plan's pools, swapping every `from`-equipment lift for its best `to` equivalent
+// ("use dumbbells instead"). Explicit user action — independent of the Settings equipment filter.
+// Locked sessions keep their snapshotted picks; only future resolveDay runs see the change.
+export async function substituteEquipment(
+  planId: string,
+  from: string,
+  to: string,
+): Promise<SubstitutionSummary> {
+  const db = await getDb()
+  const doc = await db.plans.findOne(planId).exec()
+  if (!doc) return { replaced: 0, kept: 0 }
+  const catalog = (await db.exercises.find().exec()).map((e) => e.toJSON() as Exercise)
+  const exMap = new Map(catalog.map((e) => [e.id, e]))
+  const { days, summary } = substituteInDays(JSON.parse(doc.days) as PlanDay[], exMap, catalog, from, to)
+  if (summary.replaced > 0) await doc.patch({ days: JSON.stringify(days), updatedAt: now() })
+  return summary
 }
 
 export type AddToPlanResult =
@@ -192,10 +211,38 @@ export async function resolveDay(
   }
 
   const picks: PlannedPick[] = []
+  let subCandidates: Exercise[] | null = null // lazy — only built when a slot collapses
   for (const slot of day.slots) {
     if (slot.exercisePool.length === 0) continue // genuinely empty slot
     // filter BEFORE the lastSetFor loop (correctness + fewer awaits)
     const usable = slot.exercisePool.filter(passes)
+
+    if (usable.length === 0) {
+      // Pool collapsed under the equipment/exclusion filter → substitute a catalog equivalent
+      // for the user's kit before resorting to the old unfiltered fallback.
+      subCandidates ??= [...exMap.values()].filter((e) => e.category !== 'stretching' && passes(e.id))
+      let sub: Exercise | null = null
+      for (const exId of slot.exercisePool) {
+        const src = exMap.get(exId)
+        const found = src ? findEquivalent(src, subCandidates) : null
+        if (found) {
+          sub = found.match
+          break
+        }
+      }
+      if (sub) {
+        picks.push({
+          slotId: slot.id,
+          slotLabel: slot.label,
+          exerciseId: sub.id,
+          exerciseName: sub.name,
+          pool: [...slot.exercisePool, sub.id], // substitute rides the pool → swap-back possible
+          substituted: true,
+        })
+        continue
+      }
+    }
+
     const unavailable = usable.length === 0
     const pool = unavailable ? slot.exercisePool : usable // never silently drop the slot
 
@@ -325,10 +372,12 @@ export async function setPickExercise(sessionId: string, slotId: string, exercis
   const doc = await db.sessions.findOne(sessionId).exec()
   if (!doc?.plannedDay) return
   const ex = await db.exercises.findOne(exerciseId).exec()
+  const custom = ex ? null : await db.customexercises.findOne(exerciseId).exec()
   const planned = JSON.parse(doc.plannedDay) as PlannedDay
+  // A manual choice is no longer an auto-substitution — drop the "swapped for your kit" flag.
   planned.picks = planned.picks.map((p) =>
     p.slotId === slotId
-      ? { ...p, exerciseId, exerciseName: ex?.name ?? exerciseId }
+      ? { ...p, exerciseId, exerciseName: ex?.name ?? custom?.name ?? exerciseId, substituted: undefined }
       : p,
   )
   await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
