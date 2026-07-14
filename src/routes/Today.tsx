@@ -214,6 +214,7 @@ export function Today() {
                     nameOf={nameOf}
                     muscleOf={muscleOf}
                     equipmentOf={equipmentOf}
+                    catalog={allEx}
                   />
                 ))}
               </ul>

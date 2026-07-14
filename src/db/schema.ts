@@ -295,6 +295,7 @@ export type PlannedPick = {
   targetReps?: number // M4 time-budget rep target; load stays user-entered (auto-filled)
   pool?: string[] // slot's exercise pool snapshotted at lock time → mid-session swap (M4)
   unavailable?: boolean // equipment/exclusion filter collapsed the pool → fell back unfiltered (M4)
+  substituted?: boolean // pool collapsed → resolveDay swapped in a catalog equivalent for the user's kit
   added?: boolean // ad-hoc exercise added mid-session (not from the plan) — can be saved to the plan
   savedToPlan?: boolean // an added pick that's now persisted into the plan day (recurs next time)
 }
