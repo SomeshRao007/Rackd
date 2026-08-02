@@ -34,12 +34,12 @@ session eases itself on days you report as run-down.
 - **Equipment-aware substitution** — No barbell? "Use dumbbells instead" rewrites a plan's barbell
   lifts to dumbbell equivalents. Slots that match nothing in your kit auto-swap to a catalog
   equivalent, labelled so you can see it happened.
-- **Exercise library** — 2,032 exercises, searchable and filterable by muscle group, movement
+- **Exercise library** — 2,042 exercises (including 134 stretches), searchable and filterable by muscle group, movement
   pattern, and equipment. 1,287 carry animated demonstration GIFs. Detail cards show worked muscles
   on an anatomical body map, instructions, and your cross-session records. When building a plan or
   adding exercises mid-session, you can multi-select exercises at once and view inline details without
-  losing your selection. Add your own custom exercises — the app auto-tags the muscles they work from
-  the name.
+  losing your selection. Add your own custom exercises with an optional category (Strength or Mobility) — 
+  the app auto-tags the muscles they work from the name.
 - **Progress tracking** — Volume by muscle group over 7/14/30/365-day windows with drill-down to 17
   individual muscles and a body-map heatmap. Weight-loss, strength, and hypertrophy goals with
   adaptive suggestions. Body weight and measurements with a trend sparkline.
@@ -49,9 +49,10 @@ session eases itself on days you report as run-down.
 - **Timed circuits** — Plan days can define work/rest intervals and rounds, driven by an on-screen
   countdown with a progress ring and audio cues.
 - **In-session tools** — Warm-up sets stepped down from your last working weight, per-side barbell
-  plate math (with an editable bar weight), mobility warm-up and cooldown blocks on a countdown,
-  mid-workout swaps, and add-an-exercise that can be saved back into the plan so it recurs. Tweaked
-  something? Rest a single lift or a whole muscle group, temporarily or permanently.
+  plate math (with an editable bar weight), editable mobility warm-up and cooldown blocks (add/remove moves,
+  adjust hold times 15–60s) on a countdown, mid-workout swaps, and add-an-exercise that can be saved back 
+  into the plan so it recurs. Tweaked something? Rest a single lift or a whole muscle group, temporarily 
+  or permanently.
 - **Accounts & sync** — Email/password or Google sign-in, with name and date of birth captured at
   signup and editable later in Settings. Sign in on another device and everything is restored.
 - **Installable PWA** — Add to home screen, kg↔lb toggle, and full JSON data export.

@@ -49,4 +49,25 @@ assert.deepEqual(pushOnly.map((e) => e.id).sort(), ['b', 'bp', 'e', 's'], 'patte
 const pumpUpper = filterExercises(all, { ...EMPTY_FILTER, pattern: 'pump' }, new Set())
 assert.deepEqual(pumpUpper.map((e) => e.id), ['c'], 'pump filter finds the isolation lift')
 
-console.log('✓ exercise-filter test passed (push/pull/upper/lower, power/pump/metabolic, ExerciseDB fallback, compose)')
+// ── Mobility tags (M8.4): the ONLY way to reach a stretch, since every training style excludes it.
+// id must be a real catalog id — WARMUP_IDS (src/lib/mobility.ts) is what splits dynamic from static.
+const armCircles = ex({ id: 'Arm_Circles', name: 'Arm Circles', primaryMuscles: ['shoulders'], category: 'stretching' })
+assert.ok(matchesPattern(armCircles, 'warmup'), 'a dynamic mover is warm-up material')
+assert.ok(!matchesPattern(armCircles, 'cooldown'), 'a dynamic mover is not a cooldown hold')
+assert.ok(matchesPattern(stretch, 'cooldown'), 'a static hold is cooldown material')
+assert.ok(!matchesPattern(stretch, 'warmup'), 'a static hold is not a warm-up move')
+assert.ok(!matchesPattern(bench, 'warmup') && !matchesPattern(bench, 'cooldown'), 'a strength lift is never mobility')
+
+const mobility = [...all, armCircles]
+assert.deepEqual(
+  filterExercises(mobility, { ...EMPTY_FILTER, pattern: 'warmup' }, new Set()).map((e) => e.id),
+  ['Arm_Circles'],
+  'Warm-up tag surfaces only dynamic movers',
+)
+assert.deepEqual(
+  filterExercises(mobility, { ...EMPTY_FILTER, pattern: 'cooldown' }, new Set()).map((e) => e.id),
+  ['st'],
+  'Cooldown tag surfaces only static holds',
+)
+
+console.log('✓ exercise-filter test passed (push/pull/upper/lower, power/pump/metabolic, warm-up/cooldown, ExerciseDB fallback, compose)')

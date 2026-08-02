@@ -16,12 +16,15 @@ import { ExerciseDetail } from '../routes/ExerciseDetail'
 export function ExercisePicker({
   title,
   exclude = [],
+  initialFilter,
   onPick,
   onPickMany,
   onClose,
 }: {
   title: string
   exclude?: string[]
+  /** Open pre-filtered, e.g. `{ pattern: 'warmup' }` for a mobility-only picker. */
+  initialFilter?: Partial<ExerciseFilter>
   onPick?: (e: Exercise) => void
   onPickMany?: (es: Exercise[]) => void
   onClose: () => void
@@ -29,7 +32,7 @@ export function ExercisePicker({
   const { user } = useAuth()
   const userId = user?.id ?? ''
   const prefs = usePrefs()
-  const [filter, setFilterState] = useState<ExerciseFilter>(EMPTY_FILTER)
+  const [filter, setFilterState] = useState<ExerciseFilter>({ ...EMPTY_FILTER, ...initialFilter })
   const setFilter = (patch: Partial<ExerciseFilter>) => setFilterState((f) => ({ ...f, ...patch }))
   const [picked, setPicked] = useState<Exercise[]>([])
   const [detailId, setDetailId] = useState<string | null>(null)

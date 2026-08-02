@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useDb, useRxData } from '../db/useRxData'
-import type { Exercise, MobilityStep, Plan, PlanDay, PlannedPick, SchemeId, Readiness } from '../db/schema'
+import type { Exercise, CustomExercise, MobilityStep, Plan, PlanDay, PlannedPick, SchemeId, Readiness } from '../db/schema'
+import { customToExercise } from '../db/customExercises'
 import { resolveDay, lockDay } from '../db/plans'
 import { deloadStatus } from '../db/actions'
 import { fitToBudget, mobilityMinutes } from '../db/generate'
@@ -42,9 +43,12 @@ export function StartDay() {
   const [energy, setEnergy] = useState(1)
   const [redo, setRedo] = useState(false)
 
+  // Custom lifts ride along or a user-authored exercise (or stretch) renders as its raw UUID.
   const exercises = useRxData<Exercise>((d) => d.exercises.find(), [])
-  const nameOf = useMemo(() => new Map(exercises.map((e) => [e.id, e.name])), [exercises])
-  const exMap = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises])
+  const custom = useRxData<CustomExercise>((d) => d.customexercises.find({ selector: { userId, deletedAt: null } }), [userId])
+  const allEx = useMemo(() => [...exercises, ...custom.map(customToExercise)], [exercises, custom])
+  const nameOf = useMemo(() => new Map(allEx.map((e) => [e.id, e.name])), [allEx])
+  const exMap = useMemo(() => new Map(allEx.map((e) => [e.id, e])), [allEx])
 
   useEffect(() => {
     if (!db || !planId || !dayId) return
@@ -318,7 +322,8 @@ export function StartDay() {
         </p>
       ) : (
         <>
-          <MobilityBlock title="Warm-up" steps={warmup} nameOf={nameOf} />
+          {/* Editable: mobilityMinutes feeds fitToBudget, so re-timing a hold re-fits the sets. */}
+          <MobilityBlock title="Warm-up" steps={warmup} nameOf={nameOf} onChange={setWarmup} pattern="warmup" />
 
           {/* One card per slot; every lit chip becomes its own exercise (and logger) on lock. */}
           <ul className="mt-5 space-y-4">
@@ -371,7 +376,7 @@ export function StartDay() {
             })}
           </ul>
 
-          <MobilityBlock title="Cooldown" steps={cooldown} nameOf={nameOf} />
+          <MobilityBlock title="Cooldown" steps={cooldown} nameOf={nameOf} onChange={setCooldown} pattern="cooldown" />
         </>
       )}
 

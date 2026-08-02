@@ -72,13 +72,17 @@ async function create(): Promise<WorkoutDatabase> {
     goals: { schema: goalSchema },
     bodymetrics: { schema: bodyMetricSchema },
     readiness: { schema: readinessSchema },
-    customexercises: { schema: customExerciseSchema },
+    customexercises: {
+      schema: customExerciseSchema,
+      // v0→v1 added category (M8.4); everything authored before this was a strength lift.
+      migrationStrategies: { 1: (doc) => ({ ...doc, category: '' }) },
+    },
   })
   return db
 }
 
 // Bump together with the catalog JSON filename to push a new catalog to clients.
-const CATALOG_VERSION = 3 // v3 (M8.3): +5 hand-authored conditioning/mobility moves (~2,032)
+const CATALOG_VERSION = 4 // v4 (M8.4): +10 hand-authored warm-up/cooldown moves (~2,042)
 
 /** Seed/refresh the catalog. Idempotent: re-seeds only when the version changed. */
 export async function seedCatalog(): Promise<void> {

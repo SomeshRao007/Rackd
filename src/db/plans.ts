@@ -2,10 +2,12 @@ import { getDb } from './database'
 import { getOrCreateTodaySession, lastSetFor } from './actions'
 import { getPrefs, equipmentAvailable } from '../lib/prefs'
 import { activeExclusions } from './exclusions'
-import type { Plan, PlanDay, PlannedDay, PlannedPick, Exercise, SchemeId } from './schema'
+import type { Plan, PlanDay, PlannedDay, PlannedPick, Exercise, CustomExercise, MobilityStep, SchemeId } from './schema'
 import type { PlanSchedule } from '../lib/schedule'
 import { groupOf, GROUP_LABELS, type MuscleGroupId } from '../lib/muscles'
 import { findEquivalent, substituteInDays, type SubstitutionSummary } from '../lib/substitute'
+import { isMobility, isWarmupMove, rotateBy } from '../lib/mobility'
+import { customToExercise } from './customExercises'
 
 const now = () => new Date().toISOString()
 
@@ -264,9 +266,15 @@ export async function resolveDay(
   const day = days.find((d) => d.id === dayId)
   if (!day) return { planId: plan.id, dayId, label: '', picks: [] }
 
-  // Load the catalog once → filter pools without an N+1 of findOne.
+  // Load the catalog once → filter pools without an N+1 of findOne. Custom exercises ride along so
+  // a user-authored lift resolves to its name (not a raw UUID) and a user-authored stretch is
+  // eligible for the mobility derivation.
   const allEx = await db.exercises.find().exec()
-  const exMap = new Map(allEx.map((e) => [e.id, e.toJSON() as Exercise]))
+  const allCustom = await db.customexercises.find({ selector: { userId, deletedAt: null } }).exec()
+  const exMap = new Map<string, Exercise>([
+    ...allEx.map((e) => [e.id, e.toJSON() as Exercise] as const),
+    ...allCustom.map((c) => [c.id, customToExercise(c.toJSON() as CustomExercise)] as const),
+  ])
   const { equipment } = getPrefs()
   const exclusions = await activeExclusions(userId)
   const blockedMuscles = new Set(exclusions.filter((e) => e.kind === 'muscle').map((e) => e.value))
@@ -346,26 +354,39 @@ export async function resolveDay(
     scheme: (plan.scheme as SchemeId) ?? 'double',
     picks,
     ...circuit,
-    ...deriveMobility(day, picks, exMap),
+    ...deriveMobility(dayId, picks, exMap),
   }
 }
 
-// Derive warm-up/cooldown stretches from the catalog (category 'stretching') matching the day's
-// trained muscles. ponytail: derived, not authored — see m4-deferred #5.
-function deriveMobility(
-  _day: PlanDay,
+// Propose warm-up/cooldown for a day's trained muscles: DYNAMIC movers to open, STATIC holds to
+// close, never the same move in both (the old version sliced both off one list, so the cooldown
+// repeated three of the four warm-up entries). The slice is rotated by dayId so Push A and Push B
+// don't open identically — deterministic, since Math.random would re-derive on every render.
+// Only a starting proposal now: MobilityBlock lets the user add, drop and re-time every step.
+// Exported + pure → scripts/mobility-test.ts.
+export function deriveMobility(
+  dayId: string,
   picks: PlannedPick[],
   exMap: Map<string, Exercise>,
 ): Pick<PlannedDay, 'warmup' | 'cooldown'> {
   const muscles = new Set(picks.flatMap((p) => exMap.get(p.exerciseId)?.primaryMuscles ?? []))
   if (muscles.size === 0) return {}
-  const stretches = [...exMap.values()].filter(
-    (e) => e.category === 'stretching' && e.primaryMuscles.some((m) => muscles.has(m)),
+  const relevant = [...exMap.values()].filter(
+    (e) => isMobility(e) && e.primaryMuscles.some((m) => muscles.has(m)),
   )
-  const pickN = (n: number) => stretches.slice(0, n).map((e) => ({ exerciseId: e.id, sec: 30 }))
-  const warmup = pickN(3)
-  if (warmup.length === 0) return {}
-  return { warmup, cooldown: pickN(4) }
+  const take = (pool: Exercise[], n: number) =>
+    rotateBy(pool, dayId)
+      .slice(0, n)
+      .map((e) => ({ exerciseId: e.id, sec: 30 }))
+
+  const warmup = take(relevant.filter(isWarmupMove), 3)
+  const usedInWarmup = new Set(warmup.map((s) => s.exerciseId))
+  const cooldown = take(
+    relevant.filter((e) => !usedInWarmup.has(e.id)),
+    4,
+  )
+  if (warmup.length === 0 && cooldown.length === 0) return {}
+  return { warmup, cooldown }
 }
 
 // Start (or reuse) today's session for ad-hoc logging with no plan: ensures an empty "Freestyle"
@@ -452,6 +473,21 @@ export async function setPickExercise(sessionId: string, slotId: string, exercis
       ? { ...p, exerciseId, exerciseName: ex?.name ?? custom?.name ?? exerciseId, substituted: undefined }
       : p,
   )
+  await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
+}
+
+/** Replace the locked day's warm-up or cooldown list (add / drop / re-time a step). Both already
+ *  live inside the plannedDay JSON blob, so this syncs with no schema change. */
+export async function setMobility(
+  sessionId: string,
+  which: 'warmup' | 'cooldown',
+  steps: MobilityStep[],
+): Promise<void> {
+  const db = await getDb()
+  const doc = await db.sessions.findOne(sessionId).exec()
+  if (!doc?.plannedDay) return
+  const planned = JSON.parse(doc.plannedDay) as PlannedDay
+  planned[which] = steps
   await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
 }
 

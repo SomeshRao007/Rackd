@@ -26,6 +26,9 @@ export function CreateCustomExercise({
   const [primary, setPrimary] = useState<string[]>(() => edit?.primaryMuscles ?? classify(initialName).primary)
   const [equipment, setEquipment] = useState(edit?.equipment || 'body only')
   const [instructions, setInstructions] = useState<string[]>(() => edit?.instructions ?? [])
+  // 'stretching' borrows the catalog's vocabulary → a mobility lift is derivable into a session's
+  // warm-up/cooldown and lands under the Warm-up / Cooldown library tags.
+  const [category, setCategory] = useState(edit?.category === 'stretching' ? 'stretching' : '')
   const [busy, setBusy] = useState(false)
   const equipmentTypes = allEquipmentTypes(usePrefs())
 
@@ -41,11 +44,11 @@ export function CreateCustomExercise({
     const secondaryMuscles = (edit ? edit.secondaryMuscles ?? [] : classify(name).secondary).filter((m) => !primary.includes(m))
     const steps = instructions.map((s) => s.trim()).filter(Boolean)
     if (edit) {
-      await updateCustomExercise(edit.id, { name, primaryMuscles: primary, secondaryMuscles, equipment, instructions: steps })
+      await updateCustomExercise(edit.id, { name, primaryMuscles: primary, secondaryMuscles, equipment, instructions: steps, category })
       onCreated(edit.id)
       return
     }
-    const id = await createCustomExercise(userId, { name, primaryMuscles: primary, secondaryMuscles, equipment, instructions: steps })
+    const id = await createCustomExercise(userId, { name, primaryMuscles: primary, secondaryMuscles, equipment, instructions: steps, category })
     onCreated(id)
   }
 
@@ -77,6 +80,26 @@ export function CreateCustomExercise({
               className="mt-1.5 w-full rounded-xl border border-steel-700 bg-steel-900 px-4 py-3 text-base text-chalk placeholder:text-steel-600 focus-visible:border-amber focus-visible:outline-none"
             />
           </label>
+
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-fog">Type</span>
+            <div className="mt-2 flex gap-2">
+              {([['', 'Strength'], ['stretching', 'Mobility']] as const).map(([id, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setCategory(id)}
+                  aria-pressed={category === id}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${category === id ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {category === 'stretching' && (
+              <p className="mt-1.5 text-xs text-fog">Mobility moves can be added to a session's warm-up or cooldown.</p>
+            )}
+          </div>
 
           <div>
             <div className="flex items-baseline justify-between">

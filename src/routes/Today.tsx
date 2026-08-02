@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import type { Exercise, SetLog, Plan, PlanDay, PlannedDay, Session, CustomExercise } from '../db/schema'
-import { addPickToDay, startAdHocSession, unenrollPlan } from '../db/plans'
+import { addPickToDay, startAdHocSession, unenrollPlan, setMobility, deriveMobility } from '../db/plans'
 import { finishSession } from '../db/actions'
 import { parseSchedule, nextUpIndex, forecast, addDays } from '../lib/schedule'
 import { customToExercise } from '../db/customExercises'
@@ -81,6 +81,22 @@ export function Today() {
       return null
     }
   }, [session])
+
+  // Freestyle sessions are created with no mobility (there are no picks yet to derive from). Once
+  // something is logged, propose one from what's actually being trained — the same derivation the
+  // plan days use — and persist it so it survives a reload and stays editable like any other.
+  useEffect(() => {
+    if (!sessionId || !planned || planned.dayId !== 'adhoc') return
+    if (planned.warmup || planned.cooldown || planned.picks.length === 0 || allEx.length === 0) return
+    const derived = deriveMobility('adhoc', planned.picks, new Map(allEx.map((e) => [e.id, e])))
+    // Write both unconditionally — an empty list still trips the guard above, so a session whose
+    // muscles match no stretch derives once instead of on every render. Sequential: each call is a
+    // read-modify-write of the same plannedDay blob, so firing them together loses one.
+    void (async () => {
+      await setMobility(sessionId, 'warmup', derived.warmup ?? [])
+      await setMobility(sessionId, 'cooldown', derived.cooldown ?? [])
+    })()
+  }, [sessionId, planned, allEx])
 
   // Enrollment (M8.2): the single active plan and which of its days lands on which date. Rotation
   // continues from the last FINISHED workout; today's locked day (even unfinished) counts so
@@ -191,6 +207,14 @@ export function Today() {
       {planned && sessionId ? (
         <>
           {sets.length > 0 && <Stats sets={sets.length} lifts={groups.length} volume={formatWeight(volumeKg, unit)} />}
+          {/* Mobility sits OUTSIDE the circuit branch — a timed circuit deserves a warm-up too. */}
+          <MobilityBlock
+            title="Warm-up"
+            steps={planned.warmup ?? []}
+            nameOf={nameOf}
+            onChange={(s) => void setMobility(sessionId, 'warmup', s)}
+            pattern="warmup"
+          />
           {planned.mode === 'circuit' ? (
             <CircuitTimer
               key={planned.dayId}
@@ -201,7 +225,6 @@ export function Today() {
             />
           ) : (
             <>
-              {planned.warmup && <MobilityBlock title="Warm-up" steps={planned.warmup} nameOf={nameOf} />}
               <ul className="mt-5 space-y-2">
                 {planned.picks.map((pick) => (
                   <PlannedExerciseRow
@@ -225,9 +248,15 @@ export function Today() {
               >
                 + Add exercise
               </button>
-              {planned.cooldown && <MobilityBlock title="Cooldown" steps={planned.cooldown} nameOf={nameOf} />}
             </>
           )}
+          <MobilityBlock
+            title="Cooldown"
+            steps={planned.cooldown ?? []}
+            nameOf={nameOf}
+            onChange={(s) => void setMobility(sessionId, 'cooldown', s)}
+            pattern="cooldown"
+          />
           {extraGroups.length > 0 && (
             <div className="mt-7">
               <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-fog">Also logged</h2>

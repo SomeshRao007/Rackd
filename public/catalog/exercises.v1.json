@@ -56161,5 +56161,252 @@
       "Keeping wrists and elbows on the wall, slide your arms overhead as far as they stay in contact.",
       "Slide back down, squeezing the shoulder blades together. Move slowly and stay tall."
     ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "isolation",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Leg_Swings",
+    "name": "Leg Swings",
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "quadriceps",
+      "adductors"
+    ],
+    "category": "stretching",
+    "instructions": [
+      "Hold a wall or rack for balance and stand tall on one leg.",
+      "Swing the free leg forward and back through a comfortable range, letting it climb as the hip loosens.",
+      "Switch to side-to-side swings across the body, then repeat on the other leg."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "isolation",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Walking_Knee_Hug",
+    "name": "Walking Knee Hug",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "lower back"
+    ],
+    "category": "stretching",
+    "instructions": [
+      "Step forward and pull one knee up to your chest with both hands.",
+      "Rise onto the toes of the standing leg and hold for a beat, staying tall.",
+      "Release, step through, and repeat on the other side as you walk."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "isolation",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Walking_Quad_Pull",
+    "name": "Walking Quad Pull",
+    "primaryMuscles": [
+      "quadriceps"
+    ],
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "category": "stretching",
+    "instructions": [
+      "Step forward, then pull the trailing heel toward your glute with the same-side hand.",
+      "Keep the knees together and squeeze the glute of the stretching leg so the hip stays open.",
+      "Hold for a beat, release, and alternate sides as you walk."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "isolation",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Ankle_Rocks",
+    "name": "Ankle Rocks",
+    "primaryMuscles": [
+      "calves"
+    ],
+    "secondaryMuscles": [],
+    "category": "stretching",
+    "instructions": [
+      "Take a half-kneeling position with the front foot flat and a hand on the wall for balance.",
+      "Drive the front knee forward over the toes without letting the heel lift.",
+      "Rock back and repeat for reps, then switch sides. Great before squatting."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "compound",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Bodyweight_Good_Morning",
+    "name": "Bodyweight Good Morning",
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "lower back"
+    ],
+    "category": "stretching",
+    "instructions": [
+      "Stand with feet hip-width and hands behind your head, elbows wide.",
+      "Push the hips back and hinge forward with a flat back until you feel the hamstrings load.",
+      "Drive the hips forward to stand tall. Keep it slow — this rehearses the hinge, it is not a lift."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "compound",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Hip_Airplane",
+    "name": "Hip Airplane",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "abdominals",
+      "abductors"
+    ],
+    "category": "stretching",
+    "instructions": [
+      "Balance on one leg and hinge forward until your torso and free leg form a straight line.",
+      "Holding that line, rotate the hip open toward the ceiling, then back down and under.",
+      "Move slowly and control the wobble. Switch legs."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "isolation",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Couch_Stretch",
+    "name": "Couch Stretch",
+    "primaryMuscles": [
+      "quadriceps"
+    ],
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "category": "stretching",
+    "instructions": [
+      "Half-kneel with the rear shin up a wall or couch, rear knee close to the base.",
+      "Square the hips and squeeze the rear glute to take the arch out of your lower back.",
+      "Hold and breathe. Bring the torso upright for more stretch. Switch sides."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "isolation",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Pigeon_Pose",
+    "name": "Pigeon Pose",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "abductors",
+      "lower back"
+    ],
+    "category": "stretching",
+    "instructions": [
+      "From all fours, bring one shin forward across your body and extend the other leg back.",
+      "Keep the hips square and lower your chest toward the floor over the front shin.",
+      "Breathe into the outer hip and hold. Switch sides."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "isolation",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Doorway_Pec_Stretch",
+    "name": "Doorway Pec Stretch",
+    "primaryMuscles": [
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "shoulders",
+      "biceps"
+    ],
+    "category": "stretching",
+    "instructions": [
+      "Place a forearm on a doorframe with the elbow at shoulder height.",
+      "Step through with the same-side foot and rotate the chest away until you feel the pec open.",
+      "Hold and breathe, then repeat at a higher and lower elbow angle. Switch sides."
+    ]
+  },
+  {
+    "equipment": "body only",
+    "mechanic": "isolation",
+    "level": "beginner",
+    "force": "",
+    "images": [],
+    "gifId": null,
+    "source": "custom-seed",
+    "license": "CC0",
+    "id": "Lying_Spinal_Twist",
+    "name": "Lying Spinal Twist",
+    "primaryMuscles": [
+      "lower back"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "abdominals"
+    ],
+    "category": "stretching",
+    "instructions": [
+      "Lie on your back and draw one knee up to 90 degrees.",
+      "Let that knee fall across your body while keeping both shoulders on the floor.",
+      "Turn your head the other way, breathe, and hold. Switch sides."
+    ]
   }
 ]
