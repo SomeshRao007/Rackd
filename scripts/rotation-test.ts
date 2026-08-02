@@ -3,7 +3,7 @@
  * Run: tsx scripts/rotation-test.ts  (also part of `npm test`)
  */
 import assert from 'node:assert/strict'
-import { pickLeastRecent } from '../src/db/plans.ts'
+import { pickLeastRecent, chooseFromPool } from '../src/db/plans.ts'
 
 // never-trained (null) rotates in BEFORE any trained exercise
 assert.equal(
@@ -30,4 +30,23 @@ assert.equal(
 // single-exercise pool returns its one exercise
 assert.equal(pickLeastRecent(['only'], {}), 'only', 'single-exercise pool returns it')
 
-console.log('rotation-test: OK — never-trained first, then oldest, tiebreak pool order')
+// ── anchor-first (chooseFromPool): the pool's lead lift wins whenever it survives the kit filter,
+// so progressive overload isn't reset every session once pools are 4–5 deep.
+const trained = { bench: '2026-01-01T00:00:00Z', db: null, machine: null }
+assert.equal(
+  chooseFromPool(['bench', 'db', 'machine'], ['bench', 'db', 'machine'], trained),
+  'bench',
+  'anchor wins over a never-trained alternative',
+)
+assert.equal(
+  chooseFromPool(['bench', 'db', 'machine'], ['db', 'machine'], trained),
+  'db',
+  'anchor filtered out → least-recently-trained survivor leads',
+)
+assert.equal(
+  chooseFromPool(['bench'], ['bench'], {}),
+  'bench',
+  'single-exercise pool returns its anchor',
+)
+
+console.log('rotation-test: OK — anchor-first, then never-trained, then oldest, tiebreak pool order')

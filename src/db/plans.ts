@@ -2,10 +2,12 @@ import { getDb } from './database'
 import { getOrCreateTodaySession, lastSetFor } from './actions'
 import { getPrefs, equipmentAvailable } from '../lib/prefs'
 import { activeExclusions } from './exclusions'
-import type { Plan, PlanDay, PlannedDay, PlannedPick, Exercise, SchemeId } from './schema'
+import type { Plan, PlanDay, PlannedDay, PlannedPick, Exercise, CustomExercise, MobilityStep, SchemeId } from './schema'
 import type { PlanSchedule } from '../lib/schedule'
 import { groupOf, GROUP_LABELS, type MuscleGroupId } from '../lib/muscles'
 import { findEquivalent, substituteInDays, type SubstitutionSummary } from '../lib/substitute'
+import { isMobility, isWarmupMove, rotateBy } from '../lib/mobility'
+import { customToExercise } from './customExercises'
 
 const now = () => new Date().toISOString()
 
@@ -24,6 +26,17 @@ export function pickLeastRecent(
     }
   }
   return best
+}
+
+// A pool's first entry is the plan's ANCHOR lift: always proposed while it survives the
+// equipment/exclusion filter, so progressive overload on the main lift isn't reset every week by
+// rotation. Rotation only decides which survivor leads once the anchor is filtered out.
+export function chooseFromPool(
+  pool: string[],
+  usable: string[],
+  lastTrainedAt: Record<string, string | null>,
+): string {
+  return usable[0] === pool[0] ? pool[0] : pickLeastRecent(usable, lastTrainedAt)
 }
 
 // Auto-match a plan day for a goal-suggested exercise (M6 R6 "ADD"): the day whose slots already
@@ -181,9 +194,68 @@ export async function adoptPlan(
   return plan
 }
 
-// Propose picks for a plan day — one exercise per slot, chosen by last-trained timestamp (no
-// persisted rotation state), after filtering each pool by available equipment (M4 F2) and active
-// injury exclusions (M4 F3). A slot whose pool collapses to empty falls back unfiltered + flagged.
+// ── Starter provenance ("Refresh pools") ───────────────────────────────────────
+// Adopting copies the days, so a plan adopted before the starter catalog grew never sees the new
+// alternatives. sourceShareCode doubles as the provenance tag (`starter:<id>`) — no schema change.
+export const STARTER_PREFIX = 'starter:'
+
+// Plans adopted before provenance existed carry no tag — but starter day ids are
+// `<starterId>-<day-slug>`, so the days identify their origin. ponytail: the goal-prefix regex is
+// just the cheap "is this worth offering" gate; the refresh itself matches against the real
+// catalog and reports back when it can't, so a false positive costs one tap.
+export const looksLikeStarter = (days: PlanDay[]): boolean => /^(mg|sa|wl)-/.test(days[0]?.id ?? '')
+
+/** Append pool entries the starter has gained since adoption. Append-only, so the user's anchor
+ *  (pool[0]) and any hand-reordered pool both survive. Pure — unit-tested in plan-add-test.ts. */
+export function mergeStarterPools(days: PlanDay[], starter: PlanDay[]): { days: PlanDay[]; added: number } {
+  let added = 0
+  const merged = days.map((d) => {
+    const src = starter.find((x) => x.id === d.id)
+    if (!src) return d
+    return {
+      ...d,
+      slots: d.slots.map((slot) => {
+        const from = src.slots.find((x) => x.id === slot.id)
+        if (!from) return slot
+        const fresh = from.exercisePool.filter((id) => !slot.exercisePool.includes(id))
+        added += fresh.length
+        return fresh.length ? { ...slot, exercisePool: [...slot.exercisePool, ...fresh] } : slot
+      }),
+    }
+  })
+  return { days: merged, added }
+}
+
+/** Pull new pool entries from the starter this plan was adopted from; returns the merged days so
+ *  the builder can refresh its local copy. null = not a starter plan, or the catalog is unreachable. */
+export async function refreshStarterPools(planId: string): Promise<{ added: number; days: PlanDay[] } | null> {
+  const db = await getDb()
+  const doc = await db.plans.findOne(planId).exec()
+  if (!doc) return null
+  const res = await fetch('/catalog/starter-plans.v1.json').catch(() => null)
+  if (!res?.ok) return null
+  const starters = (await res.json()) as { id: string; days: PlanDay[] }[]
+  const mine = JSON.parse(doc.days) as PlanDay[]
+  const code = doc.sourceShareCode
+  const src = code?.startsWith(STARTER_PREFIX)
+    ? starters.find((s) => s.id === code.slice(STARTER_PREFIX.length))
+    : starters.find((s) => s.days.some((d) => mine.some((m) => m.id === d.id)))
+  if (!src) return null
+
+  const { days, added } = mergeStarterPools(mine, src.days)
+  // Backfill the provenance tag while we're here, so later refreshes match exactly.
+  const patch = {
+    ...(added > 0 ? { days: JSON.stringify(days) } : {}),
+    ...(code === STARTER_PREFIX + src.id ? {} : { sourceShareCode: STARTER_PREFIX + src.id }),
+  }
+  if (Object.keys(patch).length) await doc.patch({ ...patch, updatedAt: now() })
+  return { added, days }
+}
+
+// Propose picks for a plan day — one exercise per slot (the pool's anchor lift, or the
+// least-recently-trained survivor when the anchor is filtered out), after filtering each pool by
+// available equipment (M4 F2) and active injury exclusions (M4 F3). A slot whose pool collapses to
+// empty falls back unfiltered + flagged. StartDay may then select several of a slot's pool.
 export async function resolveDay(
   plan: Plan,
   dayId: string,
@@ -194,9 +266,15 @@ export async function resolveDay(
   const day = days.find((d) => d.id === dayId)
   if (!day) return { planId: plan.id, dayId, label: '', picks: [] }
 
-  // Load the catalog once → filter pools without an N+1 of findOne.
+  // Load the catalog once → filter pools without an N+1 of findOne. Custom exercises ride along so
+  // a user-authored lift resolves to its name (not a raw UUID) and a user-authored stretch is
+  // eligible for the mobility derivation.
   const allEx = await db.exercises.find().exec()
-  const exMap = new Map(allEx.map((e) => [e.id, e.toJSON() as Exercise]))
+  const allCustom = await db.customexercises.find({ selector: { userId, deletedAt: null } }).exec()
+  const exMap = new Map<string, Exercise>([
+    ...allEx.map((e) => [e.id, e.toJSON() as Exercise] as const),
+    ...allCustom.map((c) => [c.id, customToExercise(c.toJSON() as CustomExercise)] as const),
+  ])
   const { equipment } = getPrefs()
   const exclusions = await activeExclusions(userId)
   const blockedMuscles = new Set(exclusions.filter((e) => e.kind === 'muscle').map((e) => e.value))
@@ -246,12 +324,14 @@ export async function resolveDay(
     const unavailable = usable.length === 0
     const pool = unavailable ? slot.exercisePool : usable // never silently drop the slot
 
+    // Only pay for last-trained lookups when the anchor didn't survive and rotation has to decide.
     const lastTrainedAt: Record<string, string | null> = {}
-    for (const exId of pool) {
-      const last = await lastSetFor(userId, exId)
-      lastTrainedAt[exId] = last?.createdAt ?? null
-    }
-    const exerciseId = pickLeastRecent(pool, lastTrainedAt)
+    if (pool[0] !== slot.exercisePool[0])
+      for (const exId of pool) {
+        const last = await lastSetFor(userId, exId)
+        lastTrainedAt[exId] = last?.createdAt ?? null
+      }
+    const exerciseId = chooseFromPool(slot.exercisePool, pool, lastTrainedAt)
     const ex = exMap.get(exerciseId)
     picks.push({
       slotId: slot.id,
@@ -274,26 +354,39 @@ export async function resolveDay(
     scheme: (plan.scheme as SchemeId) ?? 'double',
     picks,
     ...circuit,
-    ...deriveMobility(day, picks, exMap),
+    ...deriveMobility(dayId, picks, exMap),
   }
 }
 
-// Derive warm-up/cooldown stretches from the catalog (category 'stretching') matching the day's
-// trained muscles. ponytail: derived, not authored — see m4-deferred #5.
-function deriveMobility(
-  _day: PlanDay,
+// Propose warm-up/cooldown for a day's trained muscles: DYNAMIC movers to open, STATIC holds to
+// close, never the same move in both (the old version sliced both off one list, so the cooldown
+// repeated three of the four warm-up entries). The slice is rotated by dayId so Push A and Push B
+// don't open identically — deterministic, since Math.random would re-derive on every render.
+// Only a starting proposal now: MobilityBlock lets the user add, drop and re-time every step.
+// Exported + pure → scripts/mobility-test.ts.
+export function deriveMobility(
+  dayId: string,
   picks: PlannedPick[],
   exMap: Map<string, Exercise>,
 ): Pick<PlannedDay, 'warmup' | 'cooldown'> {
   const muscles = new Set(picks.flatMap((p) => exMap.get(p.exerciseId)?.primaryMuscles ?? []))
   if (muscles.size === 0) return {}
-  const stretches = [...exMap.values()].filter(
-    (e) => e.category === 'stretching' && e.primaryMuscles.some((m) => muscles.has(m)),
+  const relevant = [...exMap.values()].filter(
+    (e) => isMobility(e) && e.primaryMuscles.some((m) => muscles.has(m)),
   )
-  const pickN = (n: number) => stretches.slice(0, n).map((e) => ({ exerciseId: e.id, sec: 30 }))
-  const warmup = pickN(3)
-  if (warmup.length === 0) return {}
-  return { warmup, cooldown: pickN(4) }
+  const take = (pool: Exercise[], n: number) =>
+    rotateBy(pool, dayId)
+      .slice(0, n)
+      .map((e) => ({ exerciseId: e.id, sec: 30 }))
+
+  const warmup = take(relevant.filter(isWarmupMove), 3)
+  const usedInWarmup = new Set(warmup.map((s) => s.exerciseId))
+  const cooldown = take(
+    relevant.filter((e) => !usedInWarmup.has(e.id)),
+    4,
+  )
+  if (warmup.length === 0 && cooldown.length === 0) return {}
+  return { warmup, cooldown }
 }
 
 // Start (or reuse) today's session for ad-hoc logging with no plan: ensures an empty "Freestyle"
@@ -380,6 +473,21 @@ export async function setPickExercise(sessionId: string, slotId: string, exercis
       ? { ...p, exerciseId, exerciseName: ex?.name ?? custom?.name ?? exerciseId, substituted: undefined }
       : p,
   )
+  await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
+}
+
+/** Replace the locked day's warm-up or cooldown list (add / drop / re-time a step). Both already
+ *  live inside the plannedDay JSON blob, so this syncs with no schema change. */
+export async function setMobility(
+  sessionId: string,
+  which: 'warmup' | 'cooldown',
+  steps: MobilityStep[],
+): Promise<void> {
+  const db = await getDb()
+  const doc = await db.sessions.findOne(sessionId).exec()
+  if (!doc?.plannedDay) return
+  const planned = JSON.parse(doc.plannedDay) as PlannedDay
+  planned[which] = steps
   await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
 }
 

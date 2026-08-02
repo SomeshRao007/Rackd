@@ -12,6 +12,8 @@ export type CustomExerciseInput = {
   secondaryMuscles?: string[]
   equipment?: string
   instructions?: string[]
+  /** Catalog vocabulary: 'stretching' = mobility move, '' = strength lift. */
+  category?: string
 }
 
 /** Insert a user-created exercise; returns its new id (client UUID). */
@@ -27,6 +29,7 @@ export async function createCustomExercise(userId: string, input: CustomExercise
     secondaryMuscles: JSON.stringify(input.secondaryMuscles ?? []),
     equipment: input.equipment ?? '',
     instructions: JSON.stringify(input.instructions ?? []),
+    category: input.category ?? '',
     source: 'custom',
     createdAt: ts,
     updatedAt: ts,
@@ -46,6 +49,7 @@ export async function updateCustomExercise(id: string, input: CustomExerciseInpu
     secondaryMuscles: JSON.stringify(input.secondaryMuscles ?? []),
     equipment: input.equipment ?? '',
     instructions: JSON.stringify(input.instructions ?? []),
+    category: input.category ?? '',
     updatedAt: now(),
   })
 }
@@ -77,6 +81,7 @@ export function customToExercise(c: CustomExercise): Exercise {
     equipment: c.equipment ?? '',
     instructions: parseArr(c.instructions),
     images: [],
+    category: c.category ?? '',
     source: c.source ?? 'custom',
   }
 }

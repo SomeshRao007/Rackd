@@ -248,7 +248,7 @@ export const readinessSchema: RxJsonSchema<Readiness> = readinessSchemaLiteral
 // catalog Exercise shape so the detail card + body-map treat custom and catalog lifts identically.
 const customExerciseSchemaLiteral = {
   title: 'customexercise',
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -259,6 +259,10 @@ const customExerciseSchemaLiteral = {
     secondaryMuscles: { type: 'string' }, // JSON string[]
     equipment: { type: 'string' },
     instructions: { type: 'string' }, // JSON string[]
+    // Borrows the catalog's vocabulary: 'stretching' = a mobility move (warm-up/cooldown
+    // material), '' = an ordinary strength lift. Lets a user-authored stretch be derived into a
+    // session's mobility block just like a catalog one.
+    category: { type: 'string' },
     source: { type: 'string' }, // always 'custom'
     createdAt: { type: 'string' },
     updatedAt: { type: 'string' },

@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import type { Plan, PlanDay, Exercise, CustomExercise } from '../db/schema'
-import { createPlan, deletePlan, adoptPlan, fetchSharedPlan, enrollPlan, unenrollPlan, substituteEquipment } from '../db/plans'
+import { createPlan, deletePlan, adoptPlan, fetchSharedPlan, enrollPlan, unenrollPlan, substituteEquipment, STARTER_PREFIX } from '../db/plans'
 import { countByEquipment, type SubstitutionSummary } from '../lib/substitute'
 import { parseSchedule, type PlanSchedule } from '../lib/schedule'
 import { customToExercise } from '../db/customExercises'
@@ -91,7 +91,8 @@ export function Plans() {
   }
 
   async function onAdoptStarter(s: Starter) {
-    const p = await adoptPlan(userId, { name: s.name, days: s.days })
+    // Tag the provenance so "Refresh pools" can pull alternatives the starter gains later.
+    const p = await adoptPlan(userId, { name: s.name, days: s.days, shareCode: STARTER_PREFIX + s.id })
     setBrowsing(false)
     navigate(`/app/plans/${p.id}`)
   }
@@ -137,7 +138,7 @@ export function Plans() {
         <ExercisesList />
       ) : (
       <>
-      <p className="mt-4 text-sm text-fog">Build a split; exercises rotate across sessions.</p>
+      <p className="mt-4 text-sm text-fog">Build a split; each section keeps an anchor lift plus alternatives.</p>
 
       {flash && (
         <p className="mt-4 rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-2 text-sm text-green-300">

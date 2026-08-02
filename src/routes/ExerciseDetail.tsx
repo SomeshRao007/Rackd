@@ -19,9 +19,13 @@ type Tab = 'instructions' | 'records'
 // gracefully: GIF → static demo image → nothing (the body-map below always renders regardless).
 const GIF_BASE = 'https://static.exercisedb.dev/media/'
 
-export function ExerciseDetail() {
-  const { id = '' } = useParams()
+// `id`/`onBack` let the same component render inline (e.g. inside the exercise picker, where
+// navigating away would throw the selection out). As a route both fall back to the URL + history.
+export function ExerciseDetail({ id: idProp, onBack }: { id?: string; onBack?: () => void } = {}) {
+  const params = useParams()
+  const id = idProp ?? params.id ?? ''
   const navigate = useNavigate()
+  const back = onBack ?? (() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/app/today')))
   const { user } = useAuth()
   const userId = user?.id ?? ''
   const unit = useUnit()
@@ -43,7 +47,7 @@ export function ExerciseDetail() {
     <section className="pb-10">
       <button
         type="button"
-        onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/app/today'))}
+        onClick={back}
         className="-ml-1 mb-3 flex items-center gap-1 text-sm font-semibold text-fog hover:text-chalk"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">

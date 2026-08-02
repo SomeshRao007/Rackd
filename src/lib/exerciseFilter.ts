@@ -1,5 +1,6 @@
 import type { Exercise } from '../db/schema'
 import { groupOf, type MuscleGroupId } from './muscles'
+import { isMobility, isWarmupMove } from './mobility'
 
 // Shared exercise-library filter (M8.3) — the one stack used by both the Exercises library
 // (Plans → Exercises) and the ExercisePicker (add to a plan slot's pool / Today add). Kept here so
@@ -9,10 +10,13 @@ import { groupOf, type MuscleGroupId } from './muscles'
 // A cross-cut of the muscle groups: push/pull/upper/lower movement patterns + power/pump/metabolic
 // training styles, INFERRED per exercise so every lift is tagged even though the ExerciseDB rows
 // carry no `force`/`mechanic`. A discovery aid (an exercise can match several), not a strict schema.
-export type PatternId = 'push' | 'pull' | 'upper' | 'lower' | 'power' | 'pump' | 'metabolic'
-export const PATTERN_IDS: PatternId[] = ['push', 'pull', 'upper', 'lower', 'power', 'pump', 'metabolic']
+// `warmup`/`cooldown` (M8.4) cut the other way: they're the mobility tags, and they're the ONLY way
+// to reach the stretches — every training-style tag deliberately excludes them (styleOf → null).
+export type PatternId = 'push' | 'pull' | 'upper' | 'lower' | 'power' | 'pump' | 'metabolic' | 'warmup' | 'cooldown'
+export const PATTERN_IDS: PatternId[] = ['push', 'pull', 'upper', 'lower', 'power', 'pump', 'metabolic', 'warmup', 'cooldown']
 export const PATTERN_LABELS: Record<PatternId, string> = {
   push: 'Push', pull: 'Pull', upper: 'Upper', lower: 'Lower', power: 'Power', pump: 'Pump', metabolic: 'Metabolic',
+  warmup: 'Warm-up', cooldown: 'Cooldown',
 }
 
 const PUSH_MUSCLES = new Set(['chest', 'shoulders', 'triceps', 'quadriceps', 'calves'])
@@ -47,6 +51,10 @@ export function matchesPattern(e: Exercise, pattern: PatternId): boolean {
       return e.force === 'push' || (!e.force && PUSH_MUSCLES.has(primary))
     case 'pull':
       return e.force === 'pull' || (!e.force && PULL_MUSCLES.has(primary))
+    case 'warmup':
+      return isMobility(e) && isWarmupMove(e)
+    case 'cooldown':
+      return isMobility(e) && !isWarmupMove(e)
     default:
       return styleOf(e) === pattern // power | pump | metabolic
   }

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useDb, useRxData } from '../db/useRxData'
-import type { Exercise, MobilityStep, Plan, PlanDay, PlannedPick, SchemeId, Readiness } from '../db/schema'
+import type { Exercise, CustomExercise, MobilityStep, Plan, PlanDay, PlannedPick, SchemeId, Readiness } from '../db/schema'
+import { customToExercise } from '../db/customExercises'
 import { resolveDay, lockDay } from '../db/plans'
 import { deloadStatus } from '../db/actions'
 import { fitToBudget, mobilityMinutes } from '../db/generate'
@@ -25,6 +26,9 @@ export function StartDay() {
   const [plan, setPlan] = useState<Plan | null>(null)
   const [day, setDay] = useState<PlanDay | null>(null)
   const [basePicks, setBasePicks] = useState<PlannedPick[]>([])
+  // slotId → chosen exerciseIds, [0] leading. Pools are 4–5 deep now, so a slot can run more than
+  // one movement; each extra becomes its own pick (and its own logger) at lock time.
+  const [sel, setSel] = useState<Record<string, string[]>>({})
   const [warmup, setWarmup] = useState<MobilityStep[]>([])
   const [cooldown, setCooldown] = useState<MobilityStep[]>([])
   const [scheme, setScheme] = useState<SchemeId>('double')
@@ -39,9 +43,12 @@ export function StartDay() {
   const [energy, setEnergy] = useState(1)
   const [redo, setRedo] = useState(false)
 
+  // Custom lifts ride along or a user-authored exercise (or stretch) renders as its raw UUID.
   const exercises = useRxData<Exercise>((d) => d.exercises.find(), [])
-  const nameOf = useMemo(() => new Map(exercises.map((e) => [e.id, e.name])), [exercises])
-  const exMap = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises])
+  const custom = useRxData<CustomExercise>((d) => d.customexercises.find({ selector: { userId, deletedAt: null } }), [userId])
+  const allEx = useMemo(() => [...exercises, ...custom.map(customToExercise)], [exercises, custom])
+  const nameOf = useMemo(() => new Map(allEx.map((e) => [e.id, e.name])), [allEx])
+  const exMap = useMemo(() => new Map(allEx.map((e) => [e.id, e])), [allEx])
 
   useEffect(() => {
     if (!db || !planId || !dayId) return
@@ -61,6 +68,7 @@ export function StartDay() {
         setPlan(p)
         setDay(found)
         setBasePicks(resolved.picks)
+        setSel(Object.fromEntries(resolved.picks.map((p) => [p.slotId, [p.exerciseId]])))
         setWarmup(resolved.warmup ?? [])
         setCooldown(resolved.cooldown ?? [])
         setScheme(resolved.scheme ?? 'double')
@@ -110,25 +118,41 @@ export function StartDay() {
   // Deload on → half the sets here; the −15% load happens in the loggers via the flag.
   // ponytail: preview reps come from fitToBudget's mechanic defaults; the scheme's reps win when the logger opens. Bake suggestions in at lock time if the mismatch confuses.
   const mobMin = useMemo(() => mobilityMinutes([...warmup, ...cooldown]), [warmup, cooldown])
+
+  // One pick per selected exercise. Extras take a `~n` slotId — fitToBudget and every post-lock
+  // action key rows by slotId, and `~` can't occur in a generated slot id (slugs / UUIDs).
+  const expanded = useMemo(
+    () =>
+      basePicks.flatMap((p) =>
+        (sel[p.slotId] ?? [p.exerciseId]).map((exId, i) => ({
+          ...p,
+          slotId: i === 0 ? p.slotId : `${p.slotId}~${i}`,
+          exerciseId: exId,
+          exerciseName: nameOf.get(exId) ?? exId,
+          // A manual choice is no longer an auto-substitution.
+          ...(exId === p.exerciseId ? {} : { substituted: undefined }),
+        })),
+      ),
+    [basePicks, sel, nameOf],
+  )
+
   const picks = useMemo(() => {
-    if (circuit) return basePicks // timed circuit: fixed stations, no set-budget fitting
-    const fitted = fitToBudget(basePicks, exMap, prefs.budgetMin, mobMin, { restSec: prefs.restSec, workSec: prefs.workSec, maxSets: prefs.maxSets })
+    if (circuit) return expanded // timed circuit: fixed stations, no set-budget fitting
+    const fitted = fitToBudget(expanded, exMap, prefs.budgetMin, mobMin, { restSec: prefs.restSec, workSec: prefs.workSec, maxSets: prefs.maxSets })
     if (!deload) return fitted
     return fitted.map((p) =>
       p.minSets != null ? { ...p, minSets: Math.max(1, Math.round(p.minSets * DELOAD_SET_FACTOR)) } : p,
     )
-  }, [basePicks, exMap, prefs.budgetMin, mobMin, prefs.restSec, prefs.workSec, prefs.maxSets, deload, circuit])
+  }, [expanded, exMap, prefs.budgetMin, mobMin, prefs.restSec, prefs.workSec, prefs.maxSets, deload, circuit])
 
-  function swap(slotId: string, exerciseId: string) {
-    // A manual choice is no longer an auto-substitution — drop the "swapped for your kit" flag.
-    setBasePicks((cur) =>
-      cur.map((p) =>
-        p.slotId === slotId
-          ? { ...p, exerciseId, exerciseName: nameOf.get(exerciseId) ?? exerciseId, substituted: undefined }
-          : p,
-      ),
-    )
-  }
+  // Tap on = add the movement to this slot, tap off = drop it; the last one can't be removed.
+  const toggle = (slotId: string, exId: string) =>
+    setSel((cur) => {
+      const list = cur[slotId] ?? []
+      if (!list.includes(exId)) return { ...cur, [slotId]: [...list, exId] }
+      if (list.length === 1) return cur
+      return { ...cur, [slotId]: list.filter((x) => x !== exId) }
+    })
 
   async function onLock() {
     if (!plan || !day) return
@@ -179,12 +203,12 @@ export function StartDay() {
       <h1 className="font-display text-3xl font-black tracking-tight">{day.label}</h1>
       {circuit ? (
         <p className="mt-1 text-sm text-fog">
-          A timed circuit — <span className="font-semibold text-chalk">{circuit.rounds ?? 1} rounds · {circuit.workSec ?? 0}s work / {circuit.restSec ?? 0}s rest</span>. Tap to swap a station, then lock it in and hit play.
+          A timed circuit — <span className="font-semibold text-chalk">{circuit.rounds ?? 1} rounds · {circuit.workSec ?? 0}s work / {circuit.restSec ?? 0}s rest</span>. Tap to add or drop a station, then lock it in and hit play.
         </p>
       ) : (
         <>
           <p className="mt-1 text-sm text-fog">
-            Proposed by least-recently-trained, filtered to your kit. Tap to swap, set a time budget, then lock it in.
+            Your anchor lift per section, filtered to your kit. Tap to add or drop movements, set a time budget, then lock it in.
           </p>
           <p className="mt-1 text-sm text-fog">
             Progression: <span className="font-semibold text-chalk">{SCHEMES.find((s) => s.id === scheme)?.name}</span>{' '}
@@ -298,41 +322,51 @@ export function StartDay() {
         </p>
       ) : (
         <>
-          <MobilityBlock title="Warm-up" steps={warmup} nameOf={nameOf} />
+          {/* Editable: mobilityMinutes feeds fitToBudget, so re-timing a hold re-fits the sets. */}
+          <MobilityBlock title="Warm-up" steps={warmup} nameOf={nameOf} onChange={setWarmup} pattern="warmup" />
 
+          {/* One card per slot; every lit chip becomes its own exercise (and logger) on lock. */}
           <ul className="mt-5 space-y-4">
-            {picks.map((pick) => {
-              const slot = day.slots.find((s) => s.id === pick.slotId)
+            {basePicks.map((base) => {
+              const slot = day.slots.find((s) => s.id === base.slotId)
+              const chosen = sel[base.slotId] ?? [base.exerciseId]
+              const setsOf = new Map(
+                picks
+                  .filter((p) => p.slotId === base.slotId || p.slotId.startsWith(`${base.slotId}~`))
+                  .map((p) => [p.exerciseId, p]),
+              )
               return (
-                <li key={pick.slotId} className="rounded-2xl border border-steel-800 bg-steel-900 p-4">
+                <li key={base.slotId} className="rounded-2xl border border-steel-800 bg-steel-900 p-4">
                   <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-xs font-bold uppercase tracking-widest text-amber">{pick.slotLabel}</p>
-                    {pick.minSets != null && (
-                      <p className="nums text-xs font-bold text-fog">
-                        {pick.minSets} × {pick.targetReps}
-                      </p>
-                    )}
+                    <p className="text-xs font-bold uppercase tracking-widest text-amber">{base.slotLabel}</p>
+                    {chosen.length > 1 && <p className="nums text-xs font-bold text-fog">{chosen.length} lifts</p>}
                   </div>
-                  {pick.unavailable && (
+                  {base.unavailable && (
                     <p className="mt-1 text-xs font-semibold text-amber-dim">⚠ No available match (kit or rest) — showing all</p>
                   )}
-                  {pick.substituted && (
+                  {base.substituted && chosen.includes(base.exerciseId) && (
                     <p className="mt-1 text-xs font-semibold text-amber-dim">↻ Swapped for your kit</p>
                   )}
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {(pick.pool ?? slot?.exercisePool)?.map((exId) => {
-                      const active = exId === pick.exerciseId
+                    {(base.pool ?? slot?.exercisePool)?.map((exId) => {
+                      const active = chosen.includes(exId)
+                      const fitted = setsOf.get(exId)
                       return (
                         <button
                           key={exId}
                           type="button"
-                          onClick={() => swap(pick.slotId, exId)}
+                          onClick={() => toggle(base.slotId, exId)}
                           aria-pressed={active}
-                          className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                          className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
                             active ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'
                           }`}
                         >
                           {nameOf.get(exId) ?? exId}
+                          {active && fitted?.minSets != null && (
+                            <span className="nums text-xs font-black text-ink/60">
+                              {fitted.minSets}×{fitted.targetReps}
+                            </span>
+                          )}
                         </button>
                       )
                     })}
@@ -342,7 +376,7 @@ export function StartDay() {
             })}
           </ul>
 
-          <MobilityBlock title="Cooldown" steps={cooldown} nameOf={nameOf} />
+          <MobilityBlock title="Cooldown" steps={cooldown} nameOf={nameOf} onChange={setCooldown} pattern="cooldown" />
         </>
       )}
 
