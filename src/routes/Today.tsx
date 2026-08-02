@@ -57,9 +57,9 @@ export function Today() {
 
   // Add-exercise works from any state, incl. a cold start with no plan/session (replaces the Log tab):
   // ensure today's session + a "Freestyle" day exist, then append the pick so it gets an inline logger.
-  const handleAdd = async (e: Exercise) => {
+  const handleAdd = async (es: Exercise[]) => {
     const sid = await startAdHocSession(userId)
-    await addPickToDay(sid, e)
+    for (const e of es) await addPickToDay(sid, e)
     setAdding(false)
   }
 
@@ -263,7 +263,7 @@ export function Today() {
         <ExercisePicker
           title="Add an exercise"
           exclude={planned?.picks.map((p) => p.exerciseId) ?? []}
-          onPick={handleAdd}
+          onPickMany={handleAdd}
           onClose={() => setAdding(false)}
         />
       )}

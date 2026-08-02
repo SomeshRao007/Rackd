@@ -16,13 +16,18 @@ session eases itself on days you report as run-down.
   writes replicate to Cloudflare D1 when you're back online (last-write-wins, no CRDTs). Log
   against a plan, or start a plan-free "Freestyle" session and log on the fly.
 - **Plans & scheduling** — Build a plan of days (Push/Pull/Legs) and slots, or adopt one of 10
-  curated goal-tagged starter plans. Enroll a plan with a start date and training weekdays; days
-  rotate across them and self-heal over missed sessions. A calendar strip on Today shows finished
-  workouts and what's coming up, and an explicit "Finish workout" action advances the rotation.
-  Share plans by code as immutable snapshots.
+  curated goal-tagged starter plans. Each slot has an anchor lift plus 4–5 alternatives so you can
+  rotate equipment without losing progressive overload on the main movement. Enroll a plan with a
+  start date and training weekdays; days rotate across them and self-heal over missed sessions.
+  A calendar strip on Today shows finished workouts and what's coming up, and an explicit "Finish
+  workout" action advances the rotation. Share plans by code as immutable snapshots. Adopted starter
+  plans can refresh their exercise pools to access the latest alternatives.
 - **Session generation** — Give it a time budget and it assigns sets and target reps per exercise,
   reps by movement role and sets grown greedily with compounds first, using your own rest and
-  working-set timings. Filters by your environment and available equipment.
+  working-set timings. Filters by your environment and available equipment. Each slot's anchor lift
+  is always proposed when it survives filtering, so main lifts progress uninterrupted. You can add
+  multiple alternatives to a single slot before locking, and each gets its own independent logger
+  and budget allocation.
 - **Progression & intensity** — Double progression (reps 8→12, then +2.5 kg) or linear (% of
   estimated 1RM). Suggests next-session weight and reps from your history and RIR, estimates 1RM
   via Epley, regresses load after a break, and offers a deload when fatigue accumulates.
@@ -31,8 +36,10 @@ session eases itself on days you report as run-down.
   equivalent, labelled so you can see it happened.
 - **Exercise library** — 2,032 exercises, searchable and filterable by muscle group, movement
   pattern, and equipment. 1,287 carry animated demonstration GIFs. Detail cards show worked muscles
-  on an anatomical body map, instructions, and your cross-session records. Add your own custom
-  exercises — the app auto-tags the muscles they work from the name.
+  on an anatomical body map, instructions, and your cross-session records. When building a plan or
+  adding exercises mid-session, you can multi-select exercises at once and view inline details without
+  losing your selection. Add your own custom exercises — the app auto-tags the muscles they work from
+  the name.
 - **Progress tracking** — Volume by muscle group over 7/14/30/365-day windows with drill-down to 17
   individual muscles and a body-map heatmap. Weight-loss, strength, and hypertrophy goals with
   adaptive suggestions. Body weight and measurements with a trend sparkline.

@@ -26,6 +26,17 @@ export function pickLeastRecent(
   return best
 }
 
+// A pool's first entry is the plan's ANCHOR lift: always proposed while it survives the
+// equipment/exclusion filter, so progressive overload on the main lift isn't reset every week by
+// rotation. Rotation only decides which survivor leads once the anchor is filtered out.
+export function chooseFromPool(
+  pool: string[],
+  usable: string[],
+  lastTrainedAt: Record<string, string | null>,
+): string {
+  return usable[0] === pool[0] ? pool[0] : pickLeastRecent(usable, lastTrainedAt)
+}
+
 // Auto-match a plan day for a goal-suggested exercise (M6 R6 "ADD"): the day whose slots already
 // train `group` the most, so a hypertrophy volume add lands where that muscle already lives. Circuit
 // days (M8.3 timed stations) are excluded so a strength add doesn't silently become a timed station;
@@ -181,9 +192,68 @@ export async function adoptPlan(
   return plan
 }
 
-// Propose picks for a plan day — one exercise per slot, chosen by last-trained timestamp (no
-// persisted rotation state), after filtering each pool by available equipment (M4 F2) and active
-// injury exclusions (M4 F3). A slot whose pool collapses to empty falls back unfiltered + flagged.
+// ── Starter provenance ("Refresh pools") ───────────────────────────────────────
+// Adopting copies the days, so a plan adopted before the starter catalog grew never sees the new
+// alternatives. sourceShareCode doubles as the provenance tag (`starter:<id>`) — no schema change.
+export const STARTER_PREFIX = 'starter:'
+
+// Plans adopted before provenance existed carry no tag — but starter day ids are
+// `<starterId>-<day-slug>`, so the days identify their origin. ponytail: the goal-prefix regex is
+// just the cheap "is this worth offering" gate; the refresh itself matches against the real
+// catalog and reports back when it can't, so a false positive costs one tap.
+export const looksLikeStarter = (days: PlanDay[]): boolean => /^(mg|sa|wl)-/.test(days[0]?.id ?? '')
+
+/** Append pool entries the starter has gained since adoption. Append-only, so the user's anchor
+ *  (pool[0]) and any hand-reordered pool both survive. Pure — unit-tested in plan-add-test.ts. */
+export function mergeStarterPools(days: PlanDay[], starter: PlanDay[]): { days: PlanDay[]; added: number } {
+  let added = 0
+  const merged = days.map((d) => {
+    const src = starter.find((x) => x.id === d.id)
+    if (!src) return d
+    return {
+      ...d,
+      slots: d.slots.map((slot) => {
+        const from = src.slots.find((x) => x.id === slot.id)
+        if (!from) return slot
+        const fresh = from.exercisePool.filter((id) => !slot.exercisePool.includes(id))
+        added += fresh.length
+        return fresh.length ? { ...slot, exercisePool: [...slot.exercisePool, ...fresh] } : slot
+      }),
+    }
+  })
+  return { days: merged, added }
+}
+
+/** Pull new pool entries from the starter this plan was adopted from; returns the merged days so
+ *  the builder can refresh its local copy. null = not a starter plan, or the catalog is unreachable. */
+export async function refreshStarterPools(planId: string): Promise<{ added: number; days: PlanDay[] } | null> {
+  const db = await getDb()
+  const doc = await db.plans.findOne(planId).exec()
+  if (!doc) return null
+  const res = await fetch('/catalog/starter-plans.v1.json').catch(() => null)
+  if (!res?.ok) return null
+  const starters = (await res.json()) as { id: string; days: PlanDay[] }[]
+  const mine = JSON.parse(doc.days) as PlanDay[]
+  const code = doc.sourceShareCode
+  const src = code?.startsWith(STARTER_PREFIX)
+    ? starters.find((s) => s.id === code.slice(STARTER_PREFIX.length))
+    : starters.find((s) => s.days.some((d) => mine.some((m) => m.id === d.id)))
+  if (!src) return null
+
+  const { days, added } = mergeStarterPools(mine, src.days)
+  // Backfill the provenance tag while we're here, so later refreshes match exactly.
+  const patch = {
+    ...(added > 0 ? { days: JSON.stringify(days) } : {}),
+    ...(code === STARTER_PREFIX + src.id ? {} : { sourceShareCode: STARTER_PREFIX + src.id }),
+  }
+  if (Object.keys(patch).length) await doc.patch({ ...patch, updatedAt: now() })
+  return { added, days }
+}
+
+// Propose picks for a plan day — one exercise per slot (the pool's anchor lift, or the
+// least-recently-trained survivor when the anchor is filtered out), after filtering each pool by
+// available equipment (M4 F2) and active injury exclusions (M4 F3). A slot whose pool collapses to
+// empty falls back unfiltered + flagged. StartDay may then select several of a slot's pool.
 export async function resolveDay(
   plan: Plan,
   dayId: string,
@@ -246,12 +316,14 @@ export async function resolveDay(
     const unavailable = usable.length === 0
     const pool = unavailable ? slot.exercisePool : usable // never silently drop the slot
 
+    // Only pay for last-trained lookups when the anchor didn't survive and rotation has to decide.
     const lastTrainedAt: Record<string, string | null> = {}
-    for (const exId of pool) {
-      const last = await lastSetFor(userId, exId)
-      lastTrainedAt[exId] = last?.createdAt ?? null
-    }
-    const exerciseId = pickLeastRecent(pool, lastTrainedAt)
+    if (pool[0] !== slot.exercisePool[0])
+      for (const exId of pool) {
+        const last = await lastSetFor(userId, exId)
+        lastTrainedAt[exId] = last?.createdAt ?? null
+      }
+    const exerciseId = chooseFromPool(slot.exercisePool, pool, lastTrainedAt)
     const ex = exMap.get(exerciseId)
     picks.push({
       slotId: slot.id,

@@ -20,7 +20,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../auth/AuthContext'
 import { useDb, useRxData } from '../db/useRxData'
 import type { Exercise, Plan, PlanDay, PlanSlot, SchemeId } from '../db/schema'
-import { updatePlan, deletePlan, publishPlan } from '../db/plans'
+import { updatePlan, deletePlan, publishPlan, refreshStarterPools, looksLikeStarter, STARTER_PREFIX } from '../db/plans'
 import { SCHEMES } from '../lib/suggest'
 import { ExercisePicker } from '../components/ExercisePicker'
 
@@ -39,6 +39,8 @@ export function PlanBuilder() {
   const [pickerSlot, setPickerSlot] = useState<string | null>(null)
   const [shareCode, setShareCode] = useState('')
   const [shareNote, setShareNote] = useState('')
+  const [fromStarter, setFromStarter] = useState(false)
+  const [poolNote, setPoolNote] = useState('')
 
   const exercises = useRxData<Exercise>((d) => d.exercises.find(), [])
   const nameOf = useMemo(() => new Map(exercises.map((e) => [e.id, e.name])), [exercises])
@@ -56,7 +58,9 @@ export function PlanBuilder() {
       setName(p.name)
       setScheme((p.scheme as SchemeId | null) ?? 'double')
       try {
-        setDays(JSON.parse(p.days) as PlanDay[])
+        const parsed = JSON.parse(p.days) as PlanDay[]
+        setDays(parsed)
+        setFromStarter(!!p.sourceShareCode?.startsWith(STARTER_PREFIX) || looksLikeStarter(parsed))
       } catch {
         setDays([])
       }
@@ -92,11 +96,13 @@ export function PlanBuilder() {
     commitDays(days.map((d) => ({ ...d, slots: d.slots.map((s) => (s.id === slotId ? { ...s, label } : s)) })))
   const removeSlot = (slotId: string) =>
     commitDays(days.map((d) => ({ ...d, slots: d.slots.filter((s) => s.id !== slotId) })))
-  const addExercise = (slotId: string, exId: string) =>
+  const addExercises = (slotId: string, exIds: string[]) =>
     commitDays(days.map((d) => ({
       ...d,
       slots: d.slots.map((s) =>
-        s.id === slotId && !s.exercisePool.includes(exId) ? { ...s, exercisePool: [...s.exercisePool, exId] } : s,
+        s.id === slotId
+          ? { ...s, exercisePool: [...s.exercisePool, ...exIds.filter((x) => !s.exercisePool.includes(x))] }
+          : s,
       ),
     })))
   const removeExercise = (slotId: string, exId: string) =>
@@ -139,6 +145,17 @@ export function PlanBuilder() {
     }
   }
 
+  async function onRefreshPools() {
+    if (!planId) return
+    const r = await refreshStarterPools(planId)
+    if (!r) {
+      setPoolNote("Couldn't match this to a starter plan.")
+      return
+    }
+    setDays(r.days)
+    setPoolNote(r.added > 0 ? `Added ${r.added} alternatives.` : 'Already up to date.')
+  }
+
   async function onShare() {
     if (!token) {
       setShareNote('Sign in with the server running to share.')
@@ -177,6 +194,12 @@ export function PlanBuilder() {
         <button type="button" onClick={onShare} className="rounded-lg border border-steel-700 px-4 py-2 text-sm font-bold text-chalk transition-colors hover:bg-steel-800">
           Share
         </button>
+        {/* Adoption copies the days, so a plan adopted before the starter grew needs a pull. */}
+        {fromStarter && (
+          <button type="button" onClick={onRefreshPools} className="rounded-lg border border-steel-700 px-4 py-2 text-sm font-bold text-chalk transition-colors hover:bg-steel-800">
+            Refresh pools
+          </button>
+        )}
         <button
           type="button"
           onClick={() => {
@@ -196,6 +219,7 @@ export function PlanBuilder() {
         </p>
       )}
       {shareNote && <p className="mt-2 text-sm text-red-400">{shareNote}</p>}
+      {poolNote && <p className="mt-2 text-sm text-fog">{poolNote}</p>}
 
       {/* Progression scheme (M5): how every lift in this plan advances session to session. */}
       <div className="mt-6 rounded-2xl border border-steel-800 bg-steel-900/60 p-4">
@@ -278,7 +302,7 @@ export function PlanBuilder() {
         <ExercisePicker
           title="Add to pool"
           exclude={days.flatMap((d) => d.slots).find((s) => s.id === pickerSlot)?.exercisePool ?? []}
-          onPick={(e) => addExercise(pickerSlot, e.id)}
+          onPickMany={(es) => addExercises(pickerSlot, es.map((e) => e.id))}
           onClose={() => setPickerSlot(null)}
         />
       )}

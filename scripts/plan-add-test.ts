@@ -3,7 +3,7 @@
  * Run: tsx scripts/plan-add-test.ts  (also part of `npm test`)
  */
 import assert from 'node:assert/strict'
-import { pickPlanDayForGroup } from '../src/db/plans.ts'
+import { pickPlanDayForGroup, mergeStarterPools } from '../src/db/plans.ts'
 import type { PlanDay } from '../src/db/schema.ts'
 import type { MuscleGroupId } from '../src/lib/muscles.ts'
 
@@ -49,4 +49,31 @@ const gmap = new Map<string, MuscleGroupId | undefined>([
 // empty plan → null
 assert.equal(pickPlanDayForGroup([], gmap, 'back'), null, 'no days → null')
 
-console.log('plan-add-test: OK — auto-match to most-trained day, circuit-skip, first-day fallback')
+// ── mergeStarterPools: pull alternatives a starter gained after this plan was adopted ──
+{
+  const adopted = [day('push', undefined, [['bench'], ['ohp']])]
+  const starter = [day('push', undefined, [['bench', 'db', 'machine'], ['ohp']])]
+  const { days, added } = mergeStarterPools(adopted, starter)
+  assert.equal(added, 2, 'counts only the entries the plan was missing')
+  assert.deepEqual(days[0].slots[0].exercisePool, ['bench', 'db', 'machine'], 'appends after the anchor')
+  assert.deepEqual(days[0].slots[1].exercisePool, ['ohp'], 'untouched slot keeps its pool')
+}
+
+// re-running is a no-op, and a hand-reordered anchor survives (append-only)
+{
+  const adopted = [day('push', undefined, [['db', 'bench']])] // user promoted db to the anchor
+  const starter = [day('push', undefined, [['bench', 'db']])]
+  const { days, added } = mergeStarterPools(adopted, starter)
+  assert.equal(added, 0, 'nothing new to add')
+  assert.deepEqual(days[0].slots[0].exercisePool, ['db', 'bench'], "user's anchor is not reset")
+}
+
+// days/slots the starter no longer has (user-added) are left alone
+{
+  const adopted = [day('mine', undefined, [['bench']])]
+  const { days, added } = mergeStarterPools(adopted, [day('push', undefined, [['bench', 'db']])])
+  assert.equal(added, 0, 'unmatched day is skipped')
+  assert.deepEqual(days[0].slots[0].exercisePool, ['bench'], 'unmatched day keeps its pool')
+}
+
+console.log('plan-add-test: OK — auto-match to most-trained day, circuit-skip, first-day fallback, starter pool merge')
