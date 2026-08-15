@@ -249,7 +249,7 @@ export function Today() {
           {customizeTo && (
             <Link
               to={customizeTo}
-              className="shrink-0 text-xs font-bold uppercase tracking-wide text-fog transition-colors hover:text-chalk"
+              className="shrink-0 rounded-lg bg-amber px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber"
             >
               Customize
             </Link>

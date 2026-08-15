@@ -8,6 +8,7 @@ import { CreateCustomExercise } from '../components/CreateCustomExercise'
 import { customToExercise, deleteCustomExercise } from '../db/customExercises'
 import { useUnit, formatWeight, type Unit } from '../lib/units'
 import { epley1RM } from '../lib/lifting'
+import { mediaSources } from '../lib/exerciseMedia'
 
 // M8 reusable exercise detail (R9). Instructions ⇄ Records is a free two-way toggle (not a
 // sequence); Instructions is the landing view. The body-map lights this exercise's muscles, so
@@ -17,7 +18,7 @@ type Tab = 'instructions' | 'records'
 
 // ExerciseDB animations are hotlinked (online-only) — see scripts/seed-catalog.ts. We degrade
 // gracefully: GIF → static demo image → nothing (the body-map below always renders regardless).
-const GIF_BASE = 'https://static.exercisedb.dev/media/'
+// The candidate list itself lives in src/lib/exerciseMedia.ts, shared with the library thumbnails.
 
 // `id`/`onBack` let the same component render inline (e.g. inside the exercise picker, where
 // navigating away would throw the selection out). As a route both fall back to the URL + history.
@@ -155,11 +156,9 @@ function CustomActions({ id, onEdit, onDeleted }: { id: string; onEdit: () => vo
 // GIF first, then the static demo image, then nothing. Advances on load error, so an offline /
 // throttled / missing animation quietly falls back instead of showing a broken image.
 function ExerciseVisual({ gifId, images, name }: { gifId: string | null; images: string[]; name: string }) {
-  const sources = useMemo(
-    () => [gifId ? { url: GIF_BASE + gifId + '.gif', animated: true } : null, ...images.map((url) => ({ url, animated: false }))]
-      .filter((x): x is { url: string; animated: boolean } => !!x),
-    [gifId, images],
-  )
+  // Animation first here — on the detail page the movement is the content (the library's
+  // thumbnails ask for 'still' instead).
+  const sources = useMemo(() => mediaSources({ gifId, images }, 'animated'), [gifId, images])
   const [i, setI] = useState(0)
   const current = sources[i]
   if (!current) return null

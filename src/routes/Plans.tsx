@@ -9,6 +9,7 @@ import { parseSchedule, type PlanSchedule } from '../lib/schedule'
 import { customToExercise } from '../db/customExercises'
 import { CreateCustomExercise } from '../components/CreateCustomExercise'
 import { ExerciseFilters } from '../components/ExerciseFilters'
+import { ExerciseThumb } from '../components/ExerciseThumb'
 import { filterExercises, equipmentOptionsOf, type ExerciseFilter } from '../lib/exerciseFilter'
 import { usePrefs } from '../lib/prefs'
 
@@ -505,13 +506,20 @@ function ExercisesList() {
             <button
               type="button"
               onClick={() => navigate(`/app/exercises/${encodeURIComponent(e.id)}`)}
-              className="flex w-full items-center gap-3 rounded-xl bg-steel-900 px-4 py-3 text-left transition-colors hover:bg-steel-800 focus-visible:outline-2 focus-visible:outline-amber"
+              className="flex w-full items-center gap-3 rounded-xl bg-steel-900 p-3 text-left transition-colors hover:bg-steel-800 focus-visible:outline-2 focus-visible:outline-amber"
             >
-              <span className="flex-1 font-semibold">{e.name}</span>
-              {customIds.has(e.id) && (
-                <span className="rounded-full bg-amber/15 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-amber">custom</span>
-              )}
-              <span className="text-xs uppercase tracking-wide text-fog">{e.primaryMuscles[0] ?? e.equipment}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold">{e.name}</span>
+                <span className="mt-1 flex items-center gap-1.5">
+                  <span className="truncate text-xs uppercase tracking-wide text-fog">
+                    {e.primaryMuscles[0] ?? e.equipment}
+                  </span>
+                  {customIds.has(e.id) && (
+                    <span className="shrink-0 rounded-full bg-amber/15 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-amber">custom</span>
+                  )}
+                </span>
+              </span>
+              <ExerciseThumb ex={e} />
             </button>
           </li>
         ))}
