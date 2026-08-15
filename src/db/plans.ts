@@ -404,12 +404,27 @@ export async function startAdHocSession(userId: string): Promise<string> {
   return session.id
 }
 
-/** Lock the previewed day onto today's session (the session it instances). */
-export async function lockDay(userId: string, planned: PlannedDay): Promise<void> {
+/** Write the day onto today's session, OVERWRITING whatever was there. The explicit path — the
+ *  user asked for this day (StartDay's "Apply", "Load today's plan day"). Returns the session id. */
+export async function lockDay(userId: string, planned: PlannedDay): Promise<string> {
   const session = await getOrCreateTodaySession(userId)
   const db = await getDb()
   const doc = await db.sessions.findOne(session.id).exec()
   if (doc) await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
+  return session.id
+}
+
+/** Commit today's proposed day, but ONLY if nothing is there yet — the implicit path, run off the
+ *  first real interaction (log a set, re-time a hold, tap Finish). Write-if-absent is what makes a
+ *  late duplicate call a no-op instead of a lost update: Today's `ensureSession` closes over a
+ *  `persisted` that only refreshes on the next RxDB emission, so two quick taps can both still
+ *  believe nothing is committed. Same guard shape as startAdHocSession. Returns the session id. */
+export async function materializeDay(userId: string, planned: PlannedDay): Promise<string> {
+  const session = await getOrCreateTodaySession(userId)
+  const db = await getDb()
+  const doc = await db.sessions.findOne(session.id).exec()
+  if (doc && !doc.plannedDay) await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
+  return session.id
 }
 
 // Add an ad-hoc exercise to today's locked day mid-session (defaults to 2×10 so it joins the

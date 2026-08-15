@@ -15,10 +15,13 @@ import { ExerciseInfoLink } from './ExerciseInfoLink'
 // Only plate-loaded bars get the plate calculator; cable/machine/dumbbell/bodyweight don't stack plates.
 const PLATE_LOADED = new Set(['barbell', 'e-z curl bar'])
 
-/** One planned exercise on Today: a collapsed counter expanding into an inline mini-logger; turns green once min sets are logged. */
+/** One planned exercise on Today: a collapsed counter expanding into an inline mini-logger; turns green once min sets are logged.
+ *  `sessionId` is null until today's day is committed — the row renders and reads fine without one
+ *  (no session ⇒ no sets), and every write goes through `ensureSession` to materialize it first. */
 export function PlannedExerciseRow({
   pick,
   sessionId,
+  ensureSession,
   userId,
   scheme,
   deload,
@@ -28,7 +31,8 @@ export function PlannedExerciseRow({
   catalog,
 }: {
   pick: PlannedPick
-  sessionId: string
+  sessionId: string | null
+  ensureSession: () => Promise<string>
   userId: string
   scheme: SchemeId
   deload?: boolean
@@ -42,10 +46,12 @@ export function PlannedExerciseRow({
 
   const sets = useRxData<SetLog>(
     (db) =>
-      db.setlogs.find({
-        selector: { sessionId, exerciseId: pick.exerciseId, deletedAt: null },
-        sort: [{ createdAt: 'asc' }],
-      }),
+      sessionId
+        ? db.setlogs.find({
+            selector: { sessionId, exerciseId: pick.exerciseId, deletedAt: null },
+            sort: [{ createdAt: 'asc' }],
+          })
+        : null,
     [sessionId, pick.exerciseId],
   )
 
@@ -75,11 +81,11 @@ export function PlannedExerciseRow({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-semibold">{pick.exerciseName}</span>
+            {/* No slot label here — the section header above the row already says "Side delts". */}
             <span className="text-xs uppercase tracking-wide text-fog">
-              {pick.slotLabel}
-              {pick.substituted && <span className="text-amber"> · subbed for your kit</span>}
-              {min > 0 && ` · ${sets.length}/${min} sets`}
+              {min > 0 ? `${sets.length}/${min} sets` : 'log a set'}
               {pick.targetReps ? ` · ${pick.targetReps} reps` : ''}
+              {pick.substituted && <span className="text-amber"> · subbed for your kit</span>}
             </span>
           </span>
           {latest && (
@@ -102,7 +108,7 @@ export function PlannedExerciseRow({
       {open && (
         <InlineLogger
           pick={pick}
-          sessionId={sessionId}
+          ensureSession={ensureSession}
           userId={userId}
           scheme={scheme}
           deload={deload}
@@ -123,7 +129,7 @@ type Panel = 'none' | 'swap' | 'plates' | 'rest'
 
 function InlineLogger({
   pick,
-  sessionId,
+  ensureSession,
   userId,
   scheme,
   deload,
@@ -136,7 +142,7 @@ function InlineLogger({
   catalog,
 }: {
   pick: PlannedPick
-  sessionId: string
+  ensureSession: () => Promise<string>
   userId: string
   scheme: SchemeId
   deload?: boolean
@@ -188,10 +194,21 @@ function InlineLogger({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function onMinSets(v: string) {
+  // Every write below materializes today's day first — before that point the session doesn't exist
+  // yet, by design: opening Today must not create anything. ensureSession is idempotent.
+  async function onMinSets(v: string) {
     setMinSets(v)
     const n = Number(v)
-    void setPickMinSets(sessionId, pick.slotId, Number.isInteger(n) && n > 0 ? n : 0)
+    await setPickMinSets(await ensureSession(), pick.slotId, Number.isInteger(n) && n > 0 ? n : 0)
+  }
+  const swapTo = async (exId: string) => setPickExercise(await ensureSession(), pick.slotId, exId)
+  const saveToPlan = async () => saveAddedPickToPlan(await ensureSession(), pick.slotId)
+  // Resting commits the day too, so today stays exactly what's on screen — which is what the
+  // confirmation promises ("won't change today's session"); the exclusion only shapes future days.
+  const rest = async (kind: 'exercise' | 'muscle', value: string, label: string) => {
+    await ensureSession()
+    await addExclusion(userId, kind, value, label, 7)
+    setRestedMsg(`Resting ${label} for 1 week`)
   }
 
   const w = Number(weight)
@@ -207,7 +224,7 @@ function InlineLogger({
     if (!canLog) return
     await logSet({
       userId,
-      sessionId,
+      sessionId: await ensureSession(),
       exerciseId: pick.exerciseId,
       exerciseName: pick.exerciseName,
       weightKg: wKg,
@@ -236,7 +253,7 @@ function InlineLogger({
           ) : (
             <button
               type="button"
-              onClick={() => void saveAddedPickToPlan(sessionId, pick.slotId)}
+              onClick={() => void saveToPlan()}
               className="rounded-lg bg-steel-800 px-3 py-1.5 text-fog transition-colors hover:bg-amber hover:text-ink"
             >
               Save to plan
@@ -253,7 +270,7 @@ function InlineLogger({
                 key={exId}
                 active={exId === pick.exerciseId}
                 label={nameOf.get(exId) ?? exId}
-                onClick={() => void setPickExercise(sessionId, pick.slotId, exId)}
+                onClick={() => void swapTo(exId)}
               />
             ))}
           </div>
@@ -266,7 +283,7 @@ function InlineLogger({
                     key={e.id}
                     active={e.id === pick.exerciseId}
                     label={e.name}
-                    onClick={() => void setPickExercise(sessionId, pick.slotId, e.id)}
+                    onClick={() => void swapTo(e.id)}
                   />
                 ))}
               </div>
@@ -283,11 +300,11 @@ function InlineLogger({
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">
-              <RestButton onClick={() => { void addExclusion(userId, 'exercise', pick.exerciseId, pick.exerciseName, 7); setRestedMsg(`Resting ${pick.exerciseName} for 1 week`) }}>
+              <RestButton onClick={() => void rest('exercise', pick.exerciseId, pick.exerciseName)}>
                 Rest this lift · 1 week
               </RestButton>
               {muscle && (
-                <RestButton onClick={() => { void addExclusion(userId, 'muscle', muscle, muscle, 7); setRestedMsg(`Resting ${muscle} for 1 week`) }}>
+                <RestButton onClick={() => void rest('muscle', muscle, muscle)}>
                   Rest {muscle} · 1 week
                 </RestButton>
               )}
@@ -335,7 +352,7 @@ function InlineLogger({
           min="1"
           step="1"
           value={minSets}
-          onChange={(e) => onMinSets(e.target.value)}
+          onChange={(e) => void onMinSets(e.target.value)}
           placeholder="—"
           aria-label="Minimum sets target"
           className="nums w-16 bg-transparent text-right text-lg font-black text-chalk outline-none placeholder:text-steel-600"

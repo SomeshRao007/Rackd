@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
-import type { Exercise, SetLog, Plan, PlanDay, PlannedDay, Session, CustomExercise } from '../db/schema'
-import { addPickToDay, startAdHocSession, unenrollPlan, setMobility, deriveMobility } from '../db/plans'
+import type { Exercise, SetLog, MobilityStep, Plan, PlanDay, PlannedDay, Session, CustomExercise } from '../db/schema'
+import { addPickToDay, startAdHocSession, unenrollPlan, setMobility, deriveMobility, materializeDay, lockDay } from '../db/plans'
+import { useDayProposal } from '../db/useDayProposal'
+import { groupPicksBySection, sectionProgress } from '../lib/daySections'
 import { finishSession } from '../db/actions'
 import { parseSchedule, nextUpIndex, forecast, addDays } from '../lib/schedule'
 import { customToExercise } from '../db/customExercises'
@@ -16,6 +18,7 @@ import { groupByExercise, totalVolumeKg, type ExerciseGroup } from '../component
 import { SetRow } from '../components/SetRow'
 import { PlannedExerciseRow } from '../components/PlannedExerciseRow'
 import { MobilityBlock } from '../components/MobilityBlock'
+import { SectionHeader } from '../components/SectionHeader'
 import { CircuitTimer } from '../components/CircuitTimer'
 import { ExercisePicker } from '../components/ExercisePicker'
 import { ExerciseInfoLink } from '../components/ExerciseInfoLink'
@@ -55,25 +58,21 @@ export function Today() {
   const session = useMemo(() => sessions.find((s) => s.date === date) ?? null, [sessions, date])
   const sessionId = session?.id ?? null
 
-  // Add-exercise works from any state, incl. a cold start with no plan/session (replaces the Log tab):
-  // ensure today's session + a "Freestyle" day exist, then append the pick so it gets an inline logger.
-  const handleAdd = async (es: Exercise[]) => {
-    const sid = await startAdHocSession(userId)
-    for (const e of es) await addPickToDay(sid, e)
-    setAdding(false)
-  }
-
   // Catalog + custom maps for swap names, the micro-lesson, and the "rest this muscle" shortcut (M4).
   // Custom exercises are merged so a logged custom lift resolves its name/muscle/equipment too (R1).
   const exercises = useRxData<Exercise>((db) => db.exercises.find(), [])
   const custom = useRxData<CustomExercise>((db) => db.customexercises.find({ selector: { userId, deletedAt: null } }), [userId])
   const allEx = useMemo(() => [...exercises, ...custom.map(customToExercise)], [exercises, custom])
+  const exMap = useMemo(() => new Map(allEx.map((e) => [e.id, e])), [allEx])
   const nameOf = useMemo(() => new Map(allEx.map((e) => [e.id, e.name])), [allEx])
   const muscleOf = useMemo(() => new Map(allEx.map((e) => [e.id, e.primaryMuscles[0] ?? ''])), [allEx])
   // equipment gates the plate calculator — only plate-loaded bars have a "per side" stack.
   const equipmentOf = useMemo(() => new Map(allEx.map((e) => [e.id, e.equipment ?? ''])), [allEx])
 
-  const planned = useMemo<PlannedDay | null>(() => {
+  // The day COMMITTED to today's session. Distinct from `planned` below on purpose: anything that
+  // decides whether today counts as trained — the rotation, the rest-day layout — must read this
+  // one, never the uncommitted proposal.
+  const persisted = useMemo<PlannedDay | null>(() => {
     if (!session?.plannedDay) return null
     try {
       return JSON.parse(session.plannedDay) as PlannedDay
@@ -86,9 +85,9 @@ export function Today() {
   // something is logged, propose one from what's actually being trained — the same derivation the
   // plan days use — and persist it so it survives a reload and stays editable like any other.
   useEffect(() => {
-    if (!sessionId || !planned || planned.dayId !== 'adhoc') return
-    if (planned.warmup || planned.cooldown || planned.picks.length === 0 || allEx.length === 0) return
-    const derived = deriveMobility('adhoc', planned.picks, new Map(allEx.map((e) => [e.id, e])))
+    if (!sessionId || !persisted || persisted.dayId !== 'adhoc') return
+    if (persisted.warmup || persisted.cooldown || persisted.picks.length === 0 || allEx.length === 0) return
+    const derived = deriveMobility('adhoc', persisted.picks, exMap)
     // Write both unconditionally — an empty list still trips the guard above, so a session whose
     // muscles match no stretch derives once instead of on every render. Sequential: each call is a
     // read-modify-write of the same plannedDay blob, so firing them together loses one.
@@ -96,7 +95,7 @@ export function Today() {
       await setMobility(sessionId, 'warmup', derived.warmup ?? [])
       await setMobility(sessionId, 'cooldown', derived.cooldown ?? [])
     })()
-  }, [sessionId, planned, allEx])
+  }, [sessionId, persisted, allEx, exMap])
 
   // Enrollment (M8.2): the single active plan and which of its days lands on which date. Rotation
   // continues from the last FINISHED workout; today's locked day (even unfinished) counts so
@@ -129,7 +128,7 @@ export function Today() {
     const schedule = parseSchedule(enrolled.schedule)
     const days = parsePlanDays(enrolled.days)
     if (!schedule || days.length === 0) return null
-    const todayLockedDayId = planned && planned.planId === enrolled.id ? planned.dayId : null
+    const todayLockedDayId = persisted && persisted.planId === enrolled.id ? persisted.dayId : null
     let lastFinished: { date: string; dayId: string } | null = null
     for (const s of sessions) {
       if (!s.finishedAt || !s.plannedDay) continue
@@ -145,7 +144,46 @@ export function Today() {
     // 42 training days ≈ 2–3 months of amber dots for the calendar's month navigation.
     const upcoming = forecast(days.length, schedule, start, todayLockedDayId ? addDays(date, 1) : date, 42)
     return { days, upcoming, todayEntry: upcoming.find((u) => u.date === date) ?? null }
-  }, [enrolled, sessions, planned, date])
+  }, [enrolled, sessions, persisted, date])
+
+  // ── Today's day, with no lock step ────────────────────────────────────────
+  // A scheduled training day resolves into a live, uncommitted proposal that renders and behaves
+  // exactly like a locked one. Note `todayEntry` goes null the moment the day IS committed (the
+  // forecast then starts tomorrow) — that's what switches the proposal off, so don't "fix" it.
+  const todayDayId = agenda?.todayEntry ? agenda.days[agenda.todayEntry.dayIndex]?.id ?? null : null
+  const proposal = useDayProposal(
+    enrolled,
+    todayDayId && persisted?.dayId !== todayDayId ? todayDayId : null,
+    userId,
+    exMap,
+  )
+  const planned = persisted ?? proposal
+
+  // Commit-on-first-action. Both guards matter: the early return skips the write once we know a day
+  // is committed, and the ref single-flights concurrent callers — `persisted` only refreshes on the
+  // next RxDB emission, so two quick taps can both still believe nothing exists. `materializeDay`
+  // is write-if-absent, so a late duplicate is a no-op rather than a lost update.
+  const inflight = useRef<Promise<string> | null>(null)
+  const ensureSession = useCallback(() => {
+    if (sessionId && persisted) return Promise.resolve(sessionId)
+    inflight.current ??= (proposal ? materializeDay(userId, proposal) : startAdHocSession(userId))
+      .finally(() => {
+        inflight.current = null
+      })
+    return inflight.current
+  }, [sessionId, persisted, proposal, userId])
+
+  // Add-exercise works from any state, incl. a cold start with no plan/session (replaces the Log
+  // tab). Routed through ensureSession so adding a lift to a scheduled day commits THAT day —
+  // startAdHocSession alone would write a Freestyle day over it.
+  const handleAdd = async (es: Exercise[]) => {
+    const sid = await ensureSession()
+    for (const e of es) await addPickToDay(sid, e)
+    setAdding(false)
+  }
+
+  const saveMobility = async (which: 'warmup' | 'cooldown', steps: MobilityStep[]) =>
+    setMobility(await ensureSession(), which, steps)
 
   const doneDates = useMemo(
     () => new Set(sessions.filter((s) => s.finishedAt).map((s) => s.date)),
@@ -171,6 +209,9 @@ export function Today() {
 
   const groups = useMemo(() => groupByExercise(sets), [sets])
   const volumeKg = useMemo(() => totalVolumeKg(sets), [sets])
+  // Sections + their live set counts — "CHEST · 2/3 sets" on the rail.
+  const sections = useMemo(() => groupPicksBySection(planned?.picks ?? []), [planned])
+  const setCountOf = useMemo(() => new Map(groups.map((g) => [g.exerciseId, g.sets.length])), [groups])
   // lifts logged outside the plan still surface, under "Also logged".
   const extraGroups = useMemo(() => {
     if (!planned) return groups
@@ -186,13 +227,35 @@ export function Today() {
 
   // Rest day: enrolled, but today isn't a scheduled training day and nothing's started/logged.
   // Drives the calmer layout — big "Rest day", the plan card as the hero, logging demoted to a link.
-  const restDay = Boolean(enrolled && agenda && !agenda.todayEntry) && !planned && sets.length === 0
+  const restDay = Boolean(enrolled && agenda && !agenda.todayEntry) && !persisted && sets.length === 0
+  // Today's plan day is on screen (committed or proposed) → the "current plan" card would just
+  // repeat it. Read `planned`, not agenda.todayEntry, which nulls out once the day is committed.
+  const planDayShown = Boolean(enrolled && planned && planned.planId === enrolled.id)
+  // Today IS a training day, but resolveDay hasn't answered yet. Without this the empty-state and
+  // the plan card flash for a beat on every cold open — the exact friction this screen removed.
+  const proposalPending = todayDayId != null && !persisted && !proposal
+  const customizeTo =
+    planned && planned.planId && planned.dayId !== 'adhoc'
+      ? `/app/plans/${planned.planId}/start/${planned.dayId}`
+      : null
 
   return (
     <section>
       <h1 className="font-display text-3xl font-black tracking-tight">Today</h1>
       {firstName && <p className="mt-1 text-sm text-fog">Hey, <span className="font-bold text-chalk">{firstName}</span> 👋</p>}
-      {planned && <p className="mt-1 text-sm font-bold text-amber">{planned.label}</p>}
+      {planned && (
+        <div className="mt-1 flex items-baseline justify-between gap-3">
+          <p className="truncate text-sm font-bold text-amber">{planned.label}</p>
+          {customizeTo && (
+            <Link
+              to={customizeTo}
+              className="shrink-0 text-xs font-bold uppercase tracking-wide text-fog transition-colors hover:text-chalk"
+            >
+              Customize
+            </Link>
+          )}
+        </div>
+      )}
 
       <CalendarStrip today={date} doneDates={doneDates} scheduledDates={scheduledDates} scheduledLabels={scheduledLabels} />
 
@@ -200,11 +263,23 @@ export function Today() {
 
       {restDay && <RestDayHero />}
 
-      {enrolled && agenda && !(planned && planned.planId === enrolled.id) && (
+      {enrolled && agenda && !planDayShown && !proposal && !proposalPending && (
         <EnrolledCard plan={enrolled} agenda={agenda} date={date} />
       )}
 
-      {planned && sessionId ? (
+      {/* Freestyle already claimed today, but today is also a training day — offer the plan day
+          back. Explicit, so it overwrites; logged sets survive under "Also logged". */}
+      {persisted && proposal && (
+        <button
+          type="button"
+          onClick={() => void lockDay(userId, proposal)}
+          className="mt-4 w-full rounded-xl border border-amber/40 bg-amber/10 px-4 py-3 text-sm font-bold text-amber transition-colors hover:bg-amber/20"
+        >
+          Load today's plan day — {proposal.label}
+        </button>
+      )}
+
+      {planned ? (
         <>
           {sets.length > 0 && <Stats sets={sets.length} lifts={groups.length} volume={formatWeight(volumeKg, unit)} />}
           {/* Mobility sits OUTSIDE the circuit branch — a timed circuit deserves a warm-up too. */}
@@ -212,7 +287,7 @@ export function Today() {
             title="Warm-up"
             steps={planned.warmup ?? []}
             nameOf={nameOf}
-            onChange={(s) => void setMobility(sessionId, 'warmup', s)}
+            onChange={(s) => void saveMobility('warmup', s)}
             pattern="warmup"
           />
           {planned.mode === 'circuit' ? (
@@ -225,22 +300,42 @@ export function Today() {
             />
           ) : (
             <>
-              <ul className="mt-5 space-y-2">
-                {planned.picks.map((pick) => (
-                  <PlannedExerciseRow
-                    key={pick.slotId}
-                    pick={pick}
-                    sessionId={sessionId}
-                    userId={userId}
-                    scheme={planned.scheme ?? 'double'}
-                    deload={planned.deload ?? false}
-                    nameOf={nameOf}
-                    muscleOf={muscleOf}
-                    equipmentOf={equipmentOf}
-                    catalog={allEx}
-                  />
-                ))}
-              </ul>
+              {/* The rail: one block per section of the day, in the order you train them. */}
+              {sections.map((section) => {
+                const progress = sectionProgress(section, setCountOf)
+                return (
+                  <div key={section.label} className="mt-7">
+                    <SectionHeader
+                      label={section.label}
+                      // Only worth a header count when it aggregates something — with one lift in
+                      // the section the row underneath already says "0/2 sets".
+                      meta={
+                        section.picks.length > 1 && progress.target > 0
+                          ? `${progress.logged}/${progress.target} sets`
+                          : undefined
+                      }
+                      done={progress.done}
+                    />
+                    <ul className="space-y-2">
+                      {section.picks.map((pick) => (
+                        <PlannedExerciseRow
+                          key={pick.slotId}
+                          pick={pick}
+                          sessionId={sessionId}
+                          ensureSession={ensureSession}
+                          userId={userId}
+                          scheme={planned.scheme ?? 'double'}
+                          deload={planned.deload ?? false}
+                          nameOf={nameOf}
+                          muscleOf={muscleOf}
+                          equipmentOf={equipmentOf}
+                          catalog={allEx}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })}
               <button
                 type="button"
                 onClick={() => setAdding(true)}
@@ -254,7 +349,7 @@ export function Today() {
             title="Cooldown"
             steps={planned.cooldown ?? []}
             nameOf={nameOf}
-            onChange={(s) => void setMobility(sessionId, 'cooldown', s)}
+            onChange={(s) => void saveMobility('cooldown', s)}
             pattern="cooldown"
           />
           {extraGroups.length > 0 && (
@@ -263,8 +358,10 @@ export function Today() {
               <LoggedGroups groups={extraGroups} unit={unit} />
             </div>
           )}
-          {session && <FinishControl session={session} />}
+          <FinishControl session={session} ensureSession={ensureSession} />
         </>
+      ) : proposalPending ? (
+        <DaySkeleton />
       ) : sets.length === 0 ? (
         restDay ? (
           <RestDayLog onStart={() => setAdding(true)} />
@@ -284,7 +381,7 @@ export function Today() {
           >
             + Add exercise
           </button>
-          {session && <FinishControl session={session} />}
+          <FinishControl session={session} ensureSession={ensureSession} />
         </>
       )}
 
@@ -300,12 +397,12 @@ export function Today() {
   )
 }
 
-// Current-plan card (M8.2): the next few scheduled days ("Thu 10 · Upper") and — when today is a
-// training day — the one-tap entry into the existing StartDay flow. Hidden once today's session
-// is locked from this plan (the session UI takes over).
+// Current-plan card (M8.2): what's coming up ("Thu 10 · Upper"). It used to carry the "Start
+// workout" button into StartDay — that gate is gone, so on a training day the day itself renders
+// instead and this card is hidden entirely. What's left is the off-day view: next up, and a way
+// into the plan.
 function EnrolledCard({ plan, agenda, date }: { plan: Plan; agenda: Agenda; date: string }) {
-  const navigate = useNavigate()
-  const { days, upcoming, todayEntry } = agenda
+  const { days, upcoming } = agenda
   const next = upcoming[0]
   return (
     <div className="mt-5 rounded-2xl border border-amber/40 bg-steel-900 p-4">
@@ -325,30 +422,28 @@ function EnrolledCard({ plan, agenda, date }: { plan: Plan; agenda: Agenda; date
           </span>
         ))}
       </div>
-      {todayEntry ? (
-        <button
-          type="button"
-          onClick={() => navigate(`/app/plans/${plan.id}/start/${days[todayEntry.dayIndex].id}`)}
-          className="mt-4 w-full rounded-xl bg-amber py-3 font-display font-black uppercase tracking-wide text-ink transition-colors hover:bg-amber-bright"
-        >
-          Start {days[todayEntry.dayIndex]?.label} workout
-        </button>
-      ) : (
-        next && (
-          <p className="mt-3 text-sm text-fog">
-            Next up: <span className="font-bold text-chalk">{days[next.dayIndex]?.label}</span> on{' '}
-            {fmtDay(next.date, { weekday: 'long' })}
-          </p>
-        )
+      {next && (
+        <p className="mt-3 text-sm text-fog">
+          Next up: <span className="font-bold text-chalk">{days[next.dayIndex]?.label}</span> on{' '}
+          {fmtDay(next.date, { weekday: 'long' })}
+        </p>
       )}
     </div>
   )
 }
 
 // Finish stamps finishedAt but leaves the session open (M8.2) — green calendar day + rotation
-// advance count finished workouts only.
-function FinishControl({ session }: { session: Session }) {
-  if (session.finishedAt) {
+// advance count finished workouts only. Renders with no session yet (nothing committed), because a
+// timed circuit day never logs a set: Finish is its ONLY write, and without it the rotation would
+// never advance past a circuit.
+function FinishControl({
+  session,
+  ensureSession,
+}: {
+  session: Session | null
+  ensureSession: () => Promise<string>
+}) {
+  if (session?.finishedAt) {
     return (
       <div className="mt-6 rounded-xl border border-green-500/40 bg-green-500/10 px-4 py-3 text-center text-sm font-bold text-green-300">
         ✓ Workout complete — extra sets still count.
@@ -358,11 +453,23 @@ function FinishControl({ session }: { session: Session }) {
   return (
     <button
       type="button"
-      onClick={() => void finishSession(session.id)}
+      onClick={() => void ensureSession().then(finishSession)}
       className="mt-6 w-full rounded-xl border-2 border-green-500 py-3 font-display font-black uppercase tracking-wide text-green-400 transition-colors hover:bg-green-500 hover:text-ink"
     >
       Finish workout
     </button>
+  )
+}
+
+// Held for the beat between "today is a training day" and resolveDay answering. Shaped like the
+// rail it becomes — a section eyebrow over two exercise rows — so nothing jumps when it resolves.
+function DaySkeleton() {
+  return (
+    <div aria-hidden className="mt-7 animate-pulse space-y-2">
+      <div className="mb-2 h-3 w-24 rounded bg-steel-800" />
+      <div className="h-14 rounded-xl bg-steel-900" />
+      <div className="h-14 rounded-xl bg-steel-900" />
+    </div>
   )
 }
 

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useDb, useRxData } from '../db/useRxData'
-import type { Exercise, CustomExercise, MobilityStep, Plan, PlanDay, PlannedPick, SchemeId, Readiness } from '../db/schema'
+import type { Exercise, CustomExercise, MobilityStep, Plan, PlanDay, PlannedDay, PlannedPick, SchemeId, Readiness } from '../db/schema'
 import { customToExercise } from '../db/customExercises'
 import { resolveDay, lockDay } from '../db/plans'
-import { deloadStatus } from '../db/actions'
+import { deloadStatus, todaySession } from '../db/actions'
 import { fitToBudget, mobilityMinutes } from '../db/generate'
 import { SCHEMES, DELOAD_SET_FACTOR } from '../lib/suggest'
 import { usePrefs, setBudgetMin } from '../lib/prefs'
@@ -14,6 +14,20 @@ import { readinessScore, readinessLabel } from '../lib/readiness'
 import { MobilityBlock } from '../components/MobilityBlock'
 
 const today = () => new Date().toISOString().slice(0, 10)
+
+/** slotId → chosen exerciseIds, seeded from the committed day when there is one. Committed picks
+ *  carry the `~n` suffix a multi-movement slot mints at apply time, so strip it to get back to the
+ *  slot. Plan slots the committed day doesn't mention fall back to the freshly resolved anchor. */
+function seedSelection(basePicks: PlannedPick[], committed: PlannedDay | null): Record<string, string[]> {
+  const sel: Record<string, string[]> = {}
+  for (const p of committed?.picks ?? []) {
+    if (p.added) continue // ad-hoc lift, not a plan slot — carried through onApply instead
+    const base = p.slotId.split('~')[0]
+    ;(sel[base] ??= []).push(p.exerciseId)
+  }
+  for (const p of basePicks) sel[p.slotId] ??= [p.exerciseId]
+  return sel
+}
 
 export function StartDay() {
   const { id: planId, dayId } = useParams()
@@ -36,6 +50,12 @@ export function StartDay() {
   const [circuit, setCircuit] = useState<{ workSec?: number; restSec?: number; rounds?: number } | null>(null)
   const [deloadReason, setDeloadReason] = useState<string | null>(null)
   const [deload, setDeload] = useState(false) // never auto-applied — the user opts in
+  // Today's committed day, when this screen is opened mid-session as "Customize". Applying then
+  // has to merge rather than replace — see onApply.
+  const [committed, setCommitted] = useState<PlannedDay | null>(null)
+  // Budget/deload changed during this visit → the user asked for a refit, so the fresh set targets
+  // win over their committed ones. Untouched → they came to swap movements, keep their edits.
+  const [refitSets, setRefitSets] = useState(false)
   const [loading, setLoading] = useState(true)
   const [readiness, setReadiness] = useState<Readiness | null>(null)
   const [sleep, setSleep] = useState(1)
@@ -64,14 +84,21 @@ export function StartDay() {
         const p = doc.toJSON() as Plan
         const found = (JSON.parse(p.days) as PlanDay[]).find((x) => x.id === dayId) ?? null
         const resolved = await resolveDay(p, dayId, userId) // equipment/exclusion-filtered proposal
+        // Opened mid-session? Seed from what's actually committed, so Customize shows the day the
+        // user is training — their swaps and mobility edits — not a fresh proposal over the top.
+        const sess = await todaySession(userId)
+        const prev = sess?.plannedDay ? (JSON.parse(sess.plannedDay) as PlannedDay) : null
+        const seed = prev && prev.planId === p.id && prev.dayId === dayId ? prev : null
         if (!alive) return
         setPlan(p)
         setDay(found)
+        setCommitted(seed)
         setBasePicks(resolved.picks)
-        setSel(Object.fromEntries(resolved.picks.map((p) => [p.slotId, [p.exerciseId]])))
-        setWarmup(resolved.warmup ?? [])
-        setCooldown(resolved.cooldown ?? [])
-        setScheme(resolved.scheme ?? 'double')
+        setSel(seedSelection(resolved.picks, seed))
+        setWarmup(seed?.warmup ?? resolved.warmup ?? [])
+        setCooldown(seed?.cooldown ?? resolved.cooldown ?? [])
+        setScheme(seed?.scheme ?? resolved.scheme ?? 'double')
+        setDeload(seed?.deload ?? false)
         setCircuit(
           resolved.mode === 'circuit'
             ? { workSec: resolved.workSec, restSec: resolved.restSec, rounds: resolved.rounds }
@@ -154,13 +181,22 @@ export function StartDay() {
       return { ...cur, [slotId]: list.filter((x) => x !== exId) }
     })
 
-  async function onLock() {
+  // Apply overwrites today's day, so anything the session gained that this screen can't see has to
+  // be carried across: hand-edited set targets, and ad-hoc lifts added mid-session (their slotIds
+  // are UUIDs, absent from day.slots, so `picks` — built from basePicks — never contains them).
+  async function onApply() {
     if (!plan || !day) return
+    const prevBySlot = new Map((committed?.picks ?? []).map((p) => [p.slotId, p]))
+    const merged = picks.map((p) => {
+      const prev = prevBySlot.get(p.slotId)
+      return !refitSets && prev?.minSets != null ? { ...p, minSets: prev.minSets } : p
+    })
+    const carried = (committed?.picks ?? []).filter((p) => p.added)
     await lockDay(userId, {
       planId: plan.id,
       dayId: day.id,
       label: day.label,
-      picks,
+      picks: [...merged, ...carried],
       warmup,
       cooldown,
       scheme,
@@ -193,22 +229,28 @@ export function StartDay() {
 
   return (
     <section className="pb-24">
-      <Link to="/app/plans" className="-ml-1 mb-3 flex items-center gap-1 text-sm font-semibold text-fog hover:text-chalk">
+      {/* Reachable from Today ("Customize") and from Plans ("Start {day}") — go back where you came
+          from rather than always landing on Plans. Same idiom as ExerciseDetail. */}
+      <button
+        type="button"
+        onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/app/plans'))}
+        className="-ml-1 mb-3 flex items-center gap-1 text-sm font-semibold text-fog hover:text-chalk"
+      >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
           <path d="m15 18-6-6 6-6" />
         </svg>
-        Plans
-      </Link>
+        Back
+      </button>
 
       <h1 className="font-display text-3xl font-black tracking-tight">{day.label}</h1>
       {circuit ? (
         <p className="mt-1 text-sm text-fog">
-          A timed circuit — <span className="font-semibold text-chalk">{circuit.rounds ?? 1} rounds · {circuit.workSec ?? 0}s work / {circuit.restSec ?? 0}s rest</span>. Tap to add or drop a station, then lock it in and hit play.
+          A timed circuit — <span className="font-semibold text-chalk">{circuit.rounds ?? 1} rounds · {circuit.workSec ?? 0}s work / {circuit.restSec ?? 0}s rest</span>. Tap to add or drop a station, then apply the changes.
         </p>
       ) : (
         <>
           <p className="mt-1 text-sm text-fog">
-            Your anchor lift per section, filtered to your kit. Tap to add or drop movements, set a time budget, then lock it in.
+            Your anchor lift per section, filtered to your kit. Tap to add or drop movements, set a time budget, then apply the changes to today.
           </p>
           <p className="mt-1 text-sm text-fog">
             Progression: <span className="font-semibold text-chalk">{SCHEMES.find((s) => s.id === scheme)?.name}</span>{' '}
@@ -241,7 +283,10 @@ export function StartDay() {
           </div>
           <button
             type="button"
-            onClick={() => setDeload((d) => !d)}
+            onClick={() => {
+              setDeload((d) => !d)
+              setRefitSets(true) // deload halves the sets — that has to reach the committed day
+            }}
             aria-pressed={deload}
             className={`mt-2 rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
               deload ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'
@@ -302,7 +347,10 @@ export function StartDay() {
               min="0"
               step="5"
               value={prefs.budgetMin || ''}
-              onChange={(e) => setBudgetMin(Number(e.target.value) || 0)}
+              onChange={(e) => {
+                setBudgetMin(Number(e.target.value) || 0)
+                setRefitSets(true) // an explicit budget change re-fits every set target on apply
+              }}
               placeholder="—"
               aria-label="Time budget in minutes"
               className="nums w-16 bg-transparent text-right text-2xl font-black text-chalk outline-none placeholder:text-steel-600"
@@ -384,10 +432,10 @@ export function StartDay() {
         <div className="fixed inset-x-0 bottom-16 z-10 mx-auto max-w-lg px-4">
           <button
             type="button"
-            onClick={onLock}
+            onClick={onApply}
             className="w-full rounded-xl bg-amber py-4 font-display text-lg font-black uppercase tracking-wide text-ink shadow-lg transition-colors hover:bg-amber-bright"
           >
-            Lock day &amp; start
+            Apply changes
           </button>
         </div>
       )}

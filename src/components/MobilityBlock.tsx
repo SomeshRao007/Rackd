@@ -2,10 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import type { Exercise, MobilityStep } from '../db/schema'
 import { ExerciseInfoLink } from './ExerciseInfoLink'
 import { ExercisePicker } from './ExercisePicker'
+import { SectionHeader } from './SectionHeader'
 
 // Hold lengths the seconds badge cycles through (M8.4). Short list on purpose — a number input for
 // a stretch hold is more friction than it's worth.
 const HOLDS = [15, 30, 45, 60]
+
+// "3 moves · 1:30" — the same shape as a muscle section's "2/3 sets", so the rail reads uniformly.
+const summarize = (steps: MobilityStep[]): string => {
+  const total = steps.reduce((s, m) => s + m.sec, 0)
+  const mins = Math.floor(total / 60)
+  return `${steps.length} ${steps.length === 1 ? 'move' : 'moves'} · ${mins}:${String(total % 60).padStart(2, '0')}`
+}
 
 /** Warm-up / cooldown with a per-step seconds countdown.
  *  Pass `onChange` to make the list editable — add, drop, and re-time steps. Read-only without it.
@@ -40,19 +48,22 @@ export function MobilityBlock({
     )
 
   return (
-    <div className="mt-5">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-fog">{title}</h2>
-        {onChange && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="text-sm font-semibold text-fog transition-colors hover:text-amber"
-          >
-            + Add
-          </button>
-        )}
-      </div>
+    <div className="mt-7">
+      <SectionHeader
+        label={title}
+        meta={steps.length > 0 ? summarize(steps) : undefined}
+        action={
+          onChange && (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="text-xs font-bold uppercase tracking-wide text-fog transition-colors hover:text-amber"
+            >
+              + Add
+            </button>
+          )
+        }
+      />
       <ul className="space-y-1.5">
         {steps.map((s, i) => (
           <StretchRow

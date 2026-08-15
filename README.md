@@ -19,15 +19,17 @@ session eases itself on days you report as run-down.
   curated goal-tagged starter plans. Each slot has an anchor lift plus 4–5 alternatives so you can
   rotate equipment without losing progressive overload on the main movement. Enroll a plan with a
   start date and training weekdays; days rotate across them and self-heal over missed sessions.
-  A calendar strip on Today shows finished workouts and what's coming up, and an explicit "Finish
-  workout" action advances the rotation. Share plans by code as immutable snapshots. Adopted starter
-  plans can refresh their exercise pools to access the latest alternatives.
+  Today shows the scheduled day immediately — sectioned by slot label, with no lock step. The day
+  is held in memory and written only on your first real action, so opening the app never creates a
+  session or nudges the rotation. A calendar strip shows finished workouts and what's coming up, and
+  an explicit "Finish workout" action advances the rotation. Share plans by code as immutable
+  snapshots. Adopted starter plans can refresh their exercise pools to access the latest alternatives.
 - **Session generation** — Give it a time budget and it assigns sets and target reps per exercise,
   reps by movement role and sets grown greedily with compounds first, using your own rest and
   working-set timings. Filters by your environment and available equipment. Each slot's anchor lift
-  is always proposed when it survives filtering, so main lifts progress uninterrupted. You can add
-  multiple alternatives to a single slot before locking, and each gets its own independent logger
-  and budget allocation.
+  is always proposed when it survives filtering, so main lifts progress uninterrupted. An optional
+  "Customize" screen adds alternative movements to a slot or re-times the day; each exercise gets its
+  own independent logger and budget allocation, and lifts can be swapped mid-session.
 - **Progression & intensity** — Double progression (reps 8→12, then +2.5 kg) or linear (% of
   estimated 1RM). Suggests next-session weight and reps from your history and RIR, estimates 1RM
   via Epley, regresses load after a break, and offers a deload when fatigue accumulates.
@@ -121,6 +123,8 @@ npm run seed:bodymap   # pull anatomical body-map SVG paths
 npm run dev            # → http://localhost:5173
 ```
 
+Optionally, create `.env.development.local` with `VITE_AUTH_STUB=1` to skip the Google sign-in screen and sign in as "Local Dev". Note: this uses a client-only token that the backend does not accept, so `/sync` is unavailable — use email/password login if you need to test sync and data replication.
+
 **Full stack (auth + sync + sharing against local D1):**
 
 ```bash
@@ -145,7 +149,7 @@ against local D1 and doesn't need this flag. **Never set it in production.**
 npm run smoke   # RxDB schema sanity check (9 collections)
 npm run test    # sync replication, rotation, generation, lifting math, progression, volume,
                 # goals, readiness, consistency, PRs, gamification, scheduling, circuits,
-                # exercise filtering, plan editing, equipment substitution
+                # exercise filtering, plan editing, equipment substitution, day sections
 ```
 
 ## Deploy

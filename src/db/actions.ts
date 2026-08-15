@@ -29,6 +29,14 @@ export async function getOrCreateTodaySession(userId: string): Promise<Session> 
   return doc.toJSON() as Session
 }
 
+/** Today's session if it exists — read-only, so a screen can inspect what's committed without
+ *  creating anything (Today only materializes on a real interaction). Same deterministic key. */
+export async function todaySession(userId: string): Promise<Session | null> {
+  const db = await getDb()
+  const doc = await db.sessions.findOne(`${userId}_${today()}`).exec()
+  return doc ? (doc.toJSON() as Session) : null
+}
+
 /** Stamp the session finished (M8.2) — the session stays open, more sets can still be logged. */
 export async function finishSession(sessionId: string): Promise<void> {
   const db = await getDb()

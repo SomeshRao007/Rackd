@@ -1,7 +1,9 @@
-@import 'tailwindcss';
 /* Display face: Archivo (tight, athletic grotesque). Degrades to a narrow
-   system stack offline so the app never blocks on the network. */
+   system stack offline so the app never blocks on the network. Must sit above
+   `@import 'tailwindcss'` — that one is inlined, so anything after it is no
+   longer a leading statement and PostCSS drops it. */
 @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;800;900&display=swap');
+@import 'tailwindcss';
 
 /* ──────────────────────────────────────────────────────────────────────────
    "Garage iron" — the palette of a 6am session: ink slate, steel, and the
