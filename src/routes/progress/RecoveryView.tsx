@@ -4,6 +4,8 @@ import { useRxData } from '../../db/useRxData'
 import type { Readiness, Session, SetLog } from '../../db/schema'
 import { readinessScore, readinessLabel } from '../../lib/readiness'
 import { trainingStreak, daysSinceLastSession, detrainingRisk } from '../../lib/consistency'
+import { trainedSessions, isSkipped } from '../../lib/plannedDay'
+import { addDays } from '../../lib/schedule'
 import { detectPRs, type PRSet } from '../../lib/pr'
 import { badges, earnedCount } from '../../lib/gamification'
 import { goalProgress } from '../../lib/goals'
@@ -51,8 +53,22 @@ export function RecoveryView() {
   const scores = useMemo(() => readiness.map((r) => readinessScore(r)), [readiness])
   const currentScore = scores.at(-1) ?? null
 
-  const streak = useMemo(() => trainingStreak(sessions.map((s) => s.date), today()), [sessions])
-  const daysSince = daysSinceLastSession(sessions.map((s) => s.date), today())
+  // Skipped days are sessions, but they are NOT training (M8.6). Filtered once here rather than at
+  // each call site below — left raw, a skip would both extend the streak and reset the
+  // "days since you trained" clock that drives the detraining nudge.
+  const trained = useMemo(() => trainedSessions(sessions), [sessions])
+  const streak = useMemo(() => trainingStreak(trained.map((s) => s.date), today()), [trained])
+  const daysSince = daysSinceLastSession(trained.map((s) => s.date), today())
+  // Adherence over the last 30 days: of the days you committed to, how many did you actually do?
+  // Same window the detraining copy is framed around.
+  const adherence = useMemo(() => {
+    const since = addDays(today(), -30)
+    const recent = sessions.filter((s) => s.date >= since)
+    const skippedCount = recent.filter(isSkipped).length
+    const trainedCount = recent.length - skippedCount
+    if (trainedCount + skippedCount === 0) return null
+    return Math.round((trainedCount / (trainedCount + skippedCount)) * 100)
+  }, [sessions])
   const risk = daysSince != null ? detrainingRisk(daysSince) : null
 
   const prCount = useMemo(() => {
@@ -62,6 +78,7 @@ export function RecoveryView() {
       weightKg: s.weightKg,
       reps: s.reps,
       rir: s.rir,
+      note: s.note, // carries the warm-up marker so ramps can't become PR baselines
       createdAt: s.createdAt,
     }))
     return detectPRs(mapped).length
@@ -70,13 +87,13 @@ export function RecoveryView() {
   const badgeList = useMemo(
     () =>
       badges({
-        sessionCount: sessions.length,
+        sessionCount: trained.length,
         streakDays: streak.current,
         prCount,
         goalCompletedCount: goalStats.completedCount,
         activeGoalPct: goalStats.activePct,
       }),
-    [sessions, streak, prCount, goalStats],
+    [trained, streak, prCount, goalStats],
   )
 
   return (
@@ -103,11 +120,15 @@ export function RecoveryView() {
       </section>
 
       {/* Streak & consistency */}
+      {/* Gated on ANY session, not just trained ones: a lifter whose only activity is skipped days
+          still needs to see the streak reset and the adherence number — hiding the section there
+          would conceal exactly the case it exists to report. */}
       {sessions.length > 0 && (
         <section>
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid gap-3 ${adherence === null ? 'grid-cols-2' : 'grid-cols-3'}`}>
             <StatTile value={streak.current} label="day streak" />
             <StatTile value={streak.best} label="best streak" />
+            {adherence !== null && <StatTile value={`${adherence}%`} label="30-day adherence" />}
           </div>
           {risk && (
             <div
@@ -152,7 +173,7 @@ export function RecoveryView() {
   )
 }
 
-function StatTile({ value, label }: { value: number; label: string }) {
+function StatTile({ value, label }: { value: number | string; label: string }) {
   return (
     <div className="rounded-xl bg-steel-900 px-3 py-4 text-center">
       <div className="nums font-display text-3xl font-black text-amber">{value}</div>

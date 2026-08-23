@@ -31,8 +31,16 @@ export async function notifyStreaksAtRisk(env: PushEnv, nowMs: number): Promise<
 
   let notified = 0
   for (const sub of subs.results ?? []) {
+    // "Last trained" must mean actually trained (M8.6): a deliberately skipped day is a session
+    // row, and counting it would silence this nudge forever. Finished-OR-has-sets rather than a
+    // bare `finishedAt IS NOT NULL`, so lifters who log diligently but never tap Finish — and
+    // sessions materialized by nothing more than a stretch timer — are still handled correctly.
     const last = await env.DB.prepare(
-      `SELECT MAX(date) AS d FROM sessions WHERE userId = ? AND deletedAt IS NULL`,
+      `SELECT MAX(s.date) AS d FROM sessions s
+         WHERE s.userId = ? AND s.deletedAt IS NULL
+           AND (s.finishedAt IS NOT NULL
+                OR EXISTS (SELECT 1 FROM setlogs l
+                            WHERE l.sessionId = s.id AND l.deletedAt IS NULL))`,
     )
       .bind(sub.userId)
       .first<{ d: string | null }>()

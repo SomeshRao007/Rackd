@@ -21,8 +21,10 @@ session eases itself on days you report as run-down.
   start date and training weekdays; days rotate across them and self-heal over missed sessions.
   Today shows the scheduled day immediately — sectioned by slot label, with no lock step. The day
   is held in memory and written only on your first real action, so opening the app never creates a
-  session or nudges the rotation. A calendar strip shows finished workouts and what's coming up, and
-  an explicit "Finish workout" action advances the rotation. Share plans by code as immutable
+  session or nudges the rotation. A calendar strip shows finished workouts and what's coming up. An
+  explicit "Finish workout" action advances the rotation, and so does skipping a day — a skip moves
+  the plan on to the next day rather than letting the missed one slide forward, without counting as
+  training (it never inflates a streak) and with an undo. Share plans by code as immutable
   snapshots. Adopted starter plans can refresh their exercise pools to access the latest alternatives.
 - **Session generation** — Give it a time budget and it assigns sets and target reps per exercise,
   reps by movement role and sets grown greedily with compounds first, using your own rest and
@@ -31,8 +33,9 @@ session eases itself on days you report as run-down.
   "Customize" screen adds alternative movements to a slot or re-times the day; each exercise gets its
   own independent logger and budget allocation, and lifts can be swapped mid-session.
 - **Progression & intensity** — Double progression (reps 8→12, then +2.5 kg) or linear (% of
-  estimated 1RM). Suggests next-session weight and reps from your history and RIR, estimates 1RM
-  via Epley, regresses load after a break, and offers a deload when fatigue accumulates.
+  estimated 1RM). Bodyweight lifts log reps-only (shown as BW × reps, e.g., BW × 12).
+  Suggests next-session weight and reps from your history and RIR, estimates 1RM via Epley,
+  regresses load after a break, and offers a deload when fatigue accumulates.
 - **Equipment-aware substitution** — No barbell? "Use dumbbells instead" rewrites a plan's barbell
   lifts to dumbbell equivalents. Slots that match nothing in your kit auto-swap to a catalog
   equivalent, labelled so you can see it happened.
@@ -50,11 +53,13 @@ session eases itself on days you report as run-down.
   days, with a nudge when you fall off pace. Personal records are detected and celebrated.
 - **Timed circuits** — Plan days can define work/rest intervals and rounds, driven by an on-screen
   countdown with a progress ring and audio cues.
-- **In-session tools** — Warm-up sets stepped down from your last working weight, per-side barbell
-  plate math (with an editable bar weight), editable mobility warm-up and cooldown blocks (add/remove moves,
-  adjust hold times 15–60s) on a countdown, mid-workout swaps, and add-an-exercise that can be saved back 
-  into the plan so it recurs. Tweaked something? Rest a single lift or a whole muscle group, temporarily 
-  or permanently.
+- **In-session tools** — Warm-up sets stepped down from your last working weight, tap one to log
+  it (it's recorded but kept out of your set targets, volume, PRs and progression), per-side
+  barbell plate math (with an editable bar weight), editable mobility warm-up and cooldown blocks
+  (add/remove moves, adjust hold times 15–60s; ticked-off moves persist across a reload) on a
+  countdown, mid-workout swaps, and add-an-exercise — which files itself under the matching muscle
+  section of the day — that can be saved back into the plan so it recurs. Tweaked something? Rest a
+  single lift or a whole muscle group, temporarily or permanently.
 - **Accounts & sync** — Email/password or Google sign-in, with name and date of birth captured at
   signup and editable later in Settings. Sign in on another device and everything is restored.
 - **Installable PWA** — Add to home screen, kg↔lb toggle, and full JSON data export.

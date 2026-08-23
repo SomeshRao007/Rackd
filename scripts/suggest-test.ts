@@ -132,4 +132,42 @@ assert.equal(
 )
 assert.equal(daysBetween('2026-01-01', '2026-01-15'), 14, 'daysBetween counts calendar days')
 
+
+// 9. warm-up ramps never drive the prescription (M8.6).
+//    9a. a ramp below the work weight in the SAME session is ignored.
+const withRamp = suggestNext({
+  history: [
+    { sessionId: 's2', weightKg: 60, reps: 9, rir: 2, createdAt: '2026-08-10T10:05:00Z' },
+    { sessionId: 's2', weightKg: 40, reps: 5, note: 'Warm-up', createdAt: '2026-08-10T10:00:00Z' },
+  ],
+  scheme: 'double',
+  today: '2026-08-11',
+})
+assert.equal(withRamp?.weightKg, 60, 'ramp set in the same session does not lower the top weight')
+assert.equal(withRamp?.targetReps, 10, 'reps still climb off the 9-rep work set')
+
+//    9b. THE load-bearing case: a session containing ONLY ramps must not become the baseline.
+//        Warm up at 40, get interrupted, never log the 60 work set → next time must still say 60,
+//        not walk the lifter backwards to 40.
+const rampOnly = suggestNext({
+  history: [
+    { sessionId: 's3', weightKg: 40, reps: 5, note: 'Warm-up', createdAt: '2026-08-12T10:00:00Z' },
+    { sessionId: 's2', weightKg: 60, reps: 9, rir: 2, createdAt: '2026-08-10T10:05:00Z' },
+  ],
+  scheme: 'double',
+  today: '2026-08-13',
+})
+assert.equal(rampOnly?.weightKg, 60, 'a ramp-only session is filtered — the last real session drives it')
+
+//    9c. nothing but ramps in the whole history → no prescription (calibrate), not a 40 kg one.
+assert.equal(
+  suggestNext({
+    history: [{ sessionId: 's1', weightKg: 40, reps: 5, note: 'Warm-up', createdAt: '2026-08-12T10:00:00Z' }],
+    scheme: 'double',
+    today: '2026-08-13',
+  }),
+  null,
+  'ramps only → null (calibration prompt), never a ramp-weight prescription',
+)
+
 console.log('suggest-test: OK — double/linear progression, break re-entry, deload, date math')

@@ -9,15 +9,20 @@ import { SectionHeader } from './SectionHeader'
 const HOLDS = [15, 30, 45, 60]
 
 // "3 moves · 1:30" — the same shape as a muscle section's "2/3 sets", so the rail reads uniformly.
+// Completed moves are called out once any are done, so progress reads at a glance from the header.
 const summarize = (steps: MobilityStep[]): string => {
   const total = steps.reduce((s, m) => s + m.sec, 0)
   const mins = Math.floor(total / 60)
-  return `${steps.length} ${steps.length === 1 ? 'move' : 'moves'} · ${mins}:${String(total % 60).padStart(2, '0')}`
+  const done = steps.filter((s) => s.done).length
+  const base = `${steps.length} ${steps.length === 1 ? 'move' : 'moves'} · ${mins}:${String(total % 60).padStart(2, '0')}`
+  return done > 0 ? `${base} · ${done} done` : base
 }
 
 /** Warm-up / cooldown with a per-step seconds countdown.
- *  Pass `onChange` to make the list editable — add, drop, and re-time steps. Read-only without it.
- *  ponytail: completion is ephemeral UI, not logged to setlogs — m4-deferred #9.
+ *  Pass `onChange` to make the list editable — add, drop, re-time and tick off steps. Read-only
+ *  without it. Completion persists into the plannedDay blob (M8.6), so a reload keeps your ✓ —
+ *  and because the save routes through Today's `ensureSession`, ticking a step off an
+ *  uncommitted proposal day commits that day rather than silently discarding the progress.
  *  ponytail: no reorder; a 3-row list doesn't justify wiring up dnd-kit. */
 export function MobilityBlock({
   title,
@@ -46,6 +51,8 @@ export function MobilityBlock({
         n === i ? { ...s, sec: HOLDS[(HOLDS.indexOf(s.sec) + 1) % HOLDS.length] ?? 30 } : s,
       ),
     )
+  const setDone = (i: number, done: boolean) =>
+    onChange?.(steps.map((s, n) => (n === i ? { ...s, done } : s)))
 
   return (
     <div className="mt-7">
@@ -71,8 +78,10 @@ export function MobilityBlock({
             exerciseId={s.exerciseId}
             name={nameOf.get(s.exerciseId) ?? s.exerciseId}
             sec={s.sec}
+            done={s.done ?? false}
             onRemove={onChange && (() => removeAt(i))}
             onCycleSec={onChange && (() => cycleSec(i))}
+            onDone={onChange && ((done: boolean) => setDone(i, done))}
           />
         ))}
         {steps.length === 0 && onChange && (
@@ -99,21 +108,46 @@ function StretchRow({
   exerciseId,
   name,
   sec,
+  done,
   onRemove,
   onCycleSec,
+  onDone,
 }: {
   exerciseId: string
   name: string
   sec: number
+  done: boolean
   onRemove?: () => void
   onCycleSec?: () => void
+  onDone?: (done: boolean) => void
 }) {
-  const [left, setLeft] = useState<number | null>(null) // null = idle, 0 = done
+  const [left, setLeft] = useState<number | null>(null) // null = idle, counting down otherwise
   const timer = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
   useEffect(() => () => clearInterval(timer.current), [])
 
+  // Completion is DERIVED from the persisted prop, never seeded into state: `useState(done)` would
+  // capture the value at mount and then ignore it, which is exactly the round-trip (and the
+  // cross-device sync) this feature exists to survive.
+  const isDone = done || left === 0
+
+  // Fire the persist when the countdown lands on 0. In an effect rather than inside the setLeft
+  // updater — updaters must stay pure (StrictMode double-invokes them).
+  // Keyed on `left` alone: onDone is a fresh closure every render, so including it would re-fire
+  // the write on every parent re-render for as long as the row sits at 0.
+  useEffect(() => {
+    if (left === 0) onDone?.(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [left])
+
   const start = () => {
-    if (left !== null) return
+    // Un-tick first: a move finished in THIS session has left === 0, so the idle guard below
+    // would otherwise swallow the tap.
+    if (isDone) {
+      onDone?.(false)
+      setLeft(null)
+      return
+    }
+    if (left !== null) return // mid-countdown — ignore
     setLeft(sec)
     timer.current = setInterval(() => {
       setLeft((l) => {
@@ -125,12 +159,11 @@ function StretchRow({
       })
     }, 1000)
   }
-  const done = left === 0
 
   return (
     <li
       className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors ${
-        done ? 'border-green-500/60 bg-green-500/10' : 'border-steel-800 bg-steel-900'
+        isDone ? 'border-green-500/60 bg-green-500/10' : 'border-steel-800 bg-steel-900'
       }`}
     >
       <span className="min-w-0 flex-1 truncate text-sm font-semibold capitalize">{name}</span>
@@ -149,12 +182,12 @@ function StretchRow({
       <button
         type="button"
         onClick={start}
-        aria-label={`Start ${name} timer`}
+        aria-label={isDone ? `Mark ${name} not done` : `Start ${name} timer`}
         className={`nums shrink-0 rounded-lg px-3 py-1.5 text-sm font-black tabular-nums transition-colors ${
-          done ? 'bg-green-500 text-ink' : left !== null ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'
+          isDone ? 'bg-green-500 text-ink' : left !== null ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'
         }`}
       >
-        {left === null ? (onCycleSec ? '▶' : `${sec}s`) : done ? '✓' : `${left}s`}
+        {isDone ? '✓' : left === null ? (onCycleSec ? '▶' : `${sec}s`) : `${left}s`}
       </button>
       {onRemove && (
         <button

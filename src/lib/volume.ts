@@ -5,6 +5,7 @@
 
 import type { SetLog } from '../db/schema'
 import { GROUP_IDS, MUSCLE_GROUPS, groupOf, type MuscleGroupId } from './muscles'
+import { isWarmupSet } from './lifting'
 
 export type Tally = { sets: number; volumeKg: number }
 export type MuscleTally = Tally & { muscle: string }
@@ -28,6 +29,7 @@ export function perMuscleVolume(
   const acc: Record<string, Tally> = {}
   for (const s of sets) {
     if (since && s.createdAt < since) continue
+    if (isWarmupSet(s)) continue // ramp sets aren't training volume (M8.6)
     const m = muscleOf(s.exerciseId)
     if (!m) continue
     const t = (acc[m] ??= empty())

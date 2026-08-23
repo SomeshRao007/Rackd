@@ -3,7 +3,7 @@
  * Run: tsx scripts/lifting-test.ts  (also part of `npm test`)
  */
 import assert from 'node:assert/strict'
-import { warmupSets, platesFor } from '../src/lib/lifting.ts'
+import { warmupSets, platesFor, isWarmupSet, workSets, WARMUP_NOTE } from '../src/lib/lifting.ts'
 
 // warm-up steps DOWN from last weight, rounded to 2.5kg, all lighter than working
 assert.deepEqual(
@@ -20,5 +20,20 @@ assert.deepEqual(platesFor(100), [20, 20], '100kg = 20 bar + 40 per side (20+20)
 assert.deepEqual(platesFor(132.5), [20, 20, 15, 1.25], '132.5kg = 20 bar + 56.25 per side')
 assert.deepEqual(platesFor(20), [], 'empty bar → no plates')
 assert.deepEqual(platesFor(15), [], 'below bar weight → no plates')
+
+
+// each rung carries its own rep target, so tapping one logs a complete set (M8.6)
+assert.deepEqual(warmupSets(60).map((w) => w.reps), [8, 5], 'heavier rung → fewer reps')
+assert.ok(warmupSets(60).every((w) => w.kg > 0), 'rungs still carry weights')
+
+// warm-up marker round-trip
+assert.equal(isWarmupSet({ note: WARMUP_NOTE }), true, 'marker note identifies a ramp set')
+assert.equal(isWarmupSet({ note: 'felt easy' }), false, 'an ordinary note is not a ramp')
+assert.equal(isWarmupSet({ note: null }), false, 'no note is not a ramp')
+assert.deepEqual(
+  workSets([{ note: WARMUP_NOTE }, { note: null }, { note: 'tough' }]).length,
+  2,
+  'workSets drops only the ramps',
+)
 
 console.log('lifting-test: OK — warm-ups step down & lighter, plates per-side greedy')

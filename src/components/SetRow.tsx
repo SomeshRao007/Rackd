@@ -1,4 +1,4 @@
-import { formatWeight, type Unit } from '../lib/units'
+import { formatLoad, type Unit } from '../lib/units'
 import type { SetLog } from '../db/schema'
 
 /** One logged set. Optional onDelete renders a destructive affordance. */
@@ -20,7 +20,7 @@ export function SetRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="nums block text-lg font-semibold">
-          {formatWeight(set.weightKg, unit)}
+          {formatLoad(set.weightKg, unit)}
           <span className="px-2 text-fog">×</span>
           {set.reps}
           <span className="pl-1 text-sm font-normal text-fog"> reps</span>

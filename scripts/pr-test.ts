@@ -43,4 +43,20 @@ assert.equal(bw.length, 0, 'bodyweight sets → no weight/e1rm PR')
 assert.equal(prsOn(sets, '2026-06-08').length, 2, 'two PRs on 06-08')
 assert.equal(prsOn(sets, '2026-06-22').length, 0, 'no PRs on the regression day')
 
+
+// 6. warm-up ramps are excluded before the baseline scan (M8.6). Without the filter the 40 kg ramp
+//    would become `seenWeighted`, so the very first work set would fire a bogus day-one PR.
+const rampFirst = detectPRs([
+  { exerciseId: 'dl', exerciseName: 'dl', weightKg: 40, reps: 5, rir: null, note: 'Warm-up', createdAt: '2026-06-01T10:00:00Z' },
+  { exerciseId: 'dl', exerciseName: 'dl', weightKg: 100, reps: 5, rir: null, note: null, createdAt: '2026-06-01T10:05:00Z' },
+])
+assert.equal(rampFirst.length, 0, 'a ramp before the first work set does not create a day-one PR')
+
+// …and a ramp never counts as a PR itself, even once a baseline exists.
+const rampLater = detectPRs([
+  { exerciseId: 'dl', exerciseName: 'dl', weightKg: 100, reps: 5, rir: null, note: null, createdAt: '2026-06-01T10:00:00Z' },
+  { exerciseId: 'dl', exerciseName: 'dl', weightKg: 110, reps: 5, rir: null, note: 'Warm-up', createdAt: '2026-06-08T10:00:00Z' },
+])
+assert.equal(rampLater.length, 0, 'a heavy ramp is still not a PR')
+
 console.log('✓ pr test passed (baseline skip, weight+e1rm PRs, rep-only e1rm, bodyweight skip, date filter)')

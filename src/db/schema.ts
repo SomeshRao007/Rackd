@@ -304,7 +304,9 @@ export type PlannedPick = {
   savedToPlan?: boolean // an added pick that's now persisted into the plan day (recurs next time)
 }
 // warmup/cooldown: derived mobility stretches (exerciseId + hold seconds), M4 R8.
-export type MobilityStep = { exerciseId: string; sec: number }
+// `done` (M8.6): completion survives a reload/sync. A plain TS field inside the plannedDay JSON
+// string — NOT an RxDB property — so it needs no schema version bump and no D1 migration.
+export type MobilityStep = { exerciseId: string; sec: number; done?: boolean }
 // Per-plan progression scheme (M5); 'wave' is a future member.
 export type SchemeId = 'double' | 'linear'
 export type PlannedDay = {
@@ -316,6 +318,10 @@ export type PlannedDay = {
   cooldown?: MobilityStep[]
   scheme?: SchemeId // progression scheme snapshotted at lock time (M5)
   deload?: boolean // locked day accepted as a deload — the stateless deload history (M5)
+  // M8.6: the user deliberately passed on this day. Advances the plan rotation (so the next
+  // training date moves on instead of re-proposing it) without ever counting as a training day.
+  // Plain TS field inside the plannedDay JSON string — no RxDB version bump, no D1 migration.
+  skipped?: boolean
   mode?: 'strength' | 'circuit' // circuit → Today renders the timed CircuitTimer, not loggers (M8.3)
   workSec?: number // circuit: seconds of work per station
   restSec?: number // circuit: seconds of rest between stations

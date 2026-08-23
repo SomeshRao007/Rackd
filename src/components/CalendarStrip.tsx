@@ -14,6 +14,9 @@ const monthLabel = (y: number, m0: number) =>
 type Marks = {
   today: string
   doneDates: Set<string>
+  // Days deliberately passed on (M8.6) — dashed and muted, distinct from both a finished day and
+  // an ordinary untouched one, so the calendar reads the difference at a glance.
+  skippedDates?: Set<string>
   scheduledDates?: Set<string>
   // date → enrolled plan-day label ("Upper", "Metabolic Burst"); shown in the full-month grid (M8.3).
   scheduledLabels?: Map<string, string>
@@ -21,17 +24,24 @@ type Marks = {
 
 // Every case carries exactly one 1px border so all cells share the same box height; today-ness is an
 // amber border, done-ness a green fill (their combination = amber border + green fill). No outset ring.
-const cellClasses = (date: string, { today, doneDates }: Marks): string => {
+const cellClasses = (date: string, { today, doneDates, skippedDates }: Marks): string => {
   const done = doneDates.has(date)
+  const skipped = skippedDates?.has(date) ?? false
   const isToday = date === today
   if (done && isToday) return 'border border-amber bg-green-500/20 text-green-300'
   if (done) return 'border border-green-500/60 bg-green-500/20 text-green-300'
+  // Skipped keeps today's amber border so "today" never stops being locatable in the strip.
+  if (skipped && isToday) return 'border border-dashed border-amber bg-steel-800 text-steel-500'
+  if (skipped) return 'border border-dashed border-steel-600 bg-steel-900 text-steel-500'
   if (isToday) return 'border border-amber bg-amber text-ink'
   return 'border border-steel-800 bg-steel-900 text-fog'
 }
 
-const showDot = (date: string, { today, doneDates, scheduledDates }: Marks): boolean =>
-  (scheduledDates?.has(date) ?? false) && !doneDates.has(date) && date !== today
+const showDot = (date: string, { today, doneDates, skippedDates, scheduledDates }: Marks): boolean =>
+  (scheduledDates?.has(date) ?? false) &&
+  !doneDates.has(date) &&
+  !(skippedDates?.has(date) ?? false) &&
+  date !== today
 
 export function CalendarStrip(props: Marks) {
   const { today } = props
@@ -126,7 +136,10 @@ function MonthModal(props: Marks & { onClose: () => void }) {
           {Array.from({ length: leadBlanks }, (_, i) => <span key={`b${i}`} />)}
           {Array.from({ length: daysInMonth(month.y, month.m0) }, (_, i) => {
             const date = isoDate(month.y, month.m0, i + 1)
-            const label = !props.doneDates.has(date) ? props.scheduledLabels?.get(date) : undefined
+            const label =
+              !props.doneDates.has(date) && !props.skippedDates?.has(date)
+                ? props.scheduledLabels?.get(date)
+                : undefined
             return (
               <div key={date} className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 ${cellClasses(date, props)}`}>
                 <span className="nums text-sm font-bold leading-none">{i + 1}</span>
@@ -145,6 +158,7 @@ function MonthModal(props: Marks & { onClose: () => void }) {
         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-fog">
           <span className="flex items-center gap-1.5"><span className="size-2.5 rounded bg-amber" /> Today</span>
           <span className="flex items-center gap-1.5"><span className="size-2.5 rounded border border-green-500/60 bg-green-500/20" /> Workout done</span>
+          <span className="flex items-center gap-1.5"><span className="size-2.5 rounded border border-dashed border-steel-600 bg-steel-900" /> Skipped</span>
           <span className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-amber" /> Training day</span>
         </div>
       </div>

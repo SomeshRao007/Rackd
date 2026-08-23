@@ -2,7 +2,7 @@
 // A PR is a set that beats every EARLIER set of the same exercise — by top weight or by estimated
 // 1RM. The first set of an exercise establishes the baseline (not a PR) so day one isn't all confetti.
 
-import { epley1RM } from './lifting'
+import { epley1RM, isWarmupSet } from './lifting'
 
 export type PRSet = {
   exerciseId: string
@@ -10,6 +10,7 @@ export type PRSet = {
   weightKg: number
   reps: number
   rir?: number | null
+  note?: string | null // WARMUP_NOTE marks a ramp set — never a PR, never a baseline
   createdAt: string
 }
 export type PR = {
@@ -23,7 +24,9 @@ export type PR = {
 /** Every PR event across `sets` (any order in → chronological scan). Callers filter by date. */
 export function detectPRs(sets: PRSet[]): PR[] {
   const byEx = new Map<string, PRSet[]>()
-  for (const s of sets) {
+  // Warm-up ramps are excluded before the baseline scan (M8.6): a ramp logged ahead of the
+  // first-ever work set would otherwise become `seenWeighted`, firing a bogus day-one PR.
+  for (const s of sets.filter((x) => !isWarmupSet(x))) {
     const arr = byEx.get(s.exerciseId)
     if (arr) arr.push(s)
     else byEx.set(s.exerciseId, [s])

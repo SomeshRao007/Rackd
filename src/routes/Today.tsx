@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import type { Exercise, SetLog, MobilityStep, Plan, PlanDay, PlannedDay, Session, CustomExercise } from '../db/schema'
-import { addPickToDay, startAdHocSession, unenrollPlan, setMobility, deriveMobility, materializeDay, lockDay } from '../db/plans'
+import { addPickToDay, startAdHocSession, unenrollPlan, setMobility, deriveMobility, materializeDay, lockDay, skipDay, unskipDay } from '../db/plans'
 import { useDayProposal } from '../db/useDayProposal'
-import { groupPicksBySection, sectionProgress } from '../lib/daySections'
+import { groupPicksBySection, sectionProgress, sectionLabelFor } from '../lib/daySections'
 import { finishSession } from '../db/actions'
 import { parseSchedule, nextUpIndex, forecast, addDays } from '../lib/schedule'
+import { parsePlannedDay, trainedSessions, lastCompletedDay, isSkipped } from '../lib/plannedDay'
+import { workSets } from '../lib/lifting'
 import { customToExercise } from '../db/customExercises'
 import { type Unit, useUnit, formatWeight } from '../lib/units'
 import { trainingStreak } from '../lib/consistency'
@@ -72,14 +74,7 @@ export function Today() {
   // The day COMMITTED to today's session. Distinct from `planned` below on purpose: anything that
   // decides whether today counts as trained — the rotation, the rest-day layout — must read this
   // one, never the uncommitted proposal.
-  const persisted = useMemo<PlannedDay | null>(() => {
-    if (!session?.plannedDay) return null
-    try {
-      return JSON.parse(session.plannedDay) as PlannedDay
-    } catch {
-      return null
-    }
-  }, [session])
+  const persisted = useMemo<PlannedDay | null>(() => parsePlannedDay(session?.plannedDay), [session])
 
   // Freestyle sessions are created with no mobility (there are no picks yet to derive from). Once
   // something is logged, propose one from what's actually being trained — the same derivation the
@@ -129,18 +124,11 @@ export function Today() {
     const days = parsePlanDays(enrolled.days)
     if (!schedule || days.length === 0) return null
     const todayLockedDayId = persisted && persisted.planId === enrolled.id ? persisted.dayId : null
-    let lastFinished: { date: string; dayId: string } | null = null
-    for (const s of sessions) {
-      if (!s.finishedAt || !s.plannedDay) continue
-      try {
-        const pd = JSON.parse(s.plannedDay) as PlannedDay
-        if (pd.planId === enrolled.id && (!lastFinished || s.date > lastFinished.date))
-          lastFinished = { date: s.date, dayId: pd.dayId }
-      } catch {
-        // corrupt synced plannedDay — skip the row
-      }
-    }
-    const start = nextUpIndex(days.map((d) => d.id), todayLockedDayId ?? lastFinished?.dayId ?? null)
+    // Rotation advances past a day that was FINISHED or deliberately SKIPPED (M8.6). Without
+    // counting skips here, `todayLockedDayId` would move today's forecast along but tomorrow's
+    // recompute would snap straight back to the skipped day.
+    const lastDone = lastCompletedDay(sessions, enrolled.id)
+    const start = nextUpIndex(days.map((d) => d.id), todayLockedDayId ?? lastDone?.dayId ?? null)
     // 42 training days ≈ 2–3 months of amber dots for the calendar's month navigation.
     const upcoming = forecast(days.length, schedule, start, todayLockedDayId ? addDays(date, 1) : date, 42)
     return { days, upcoming, todayEntry: upcoming.find((u) => u.date === date) ?? null }
@@ -178,7 +166,12 @@ export function Today() {
   // startAdHocSession alone would write a Freestyle day over it.
   const handleAdd = async (es: Exercise[]) => {
     const sid = await ensureSession()
-    for (const e of es) await addPickToDay(sid, e)
+    // Labels resolve against the PRE-batch picks, so two chest adds agree on one section (both
+    // find the existing one, or both mint the identical fallback). addPickToDay re-reads the blob
+    // for the insert position, so they still land beside each other.
+    const base = planned?.picks ?? []
+    for (const e of es)
+      await addPickToDay(sid, e, sectionLabelFor(base, e.primaryMuscles?.[0] ?? '', muscleOf))
     setAdding(false)
   }
 
@@ -187,6 +180,13 @@ export function Today() {
 
   const doneDates = useMemo(
     () => new Set(sessions.filter((s) => s.finishedAt).map((s) => s.date)),
+    [sessions],
+  )
+  // Sessions that COUNT as training — skip rows removed, so passing on a day can never inflate a
+  // streak. Shared with MotivationStrip below (RecoveryView derives its own the same way).
+  const trained = useMemo(() => trainedSessions(sessions), [sessions])
+  const skippedDates = useMemo(
+    () => new Set(sessions.filter(isSkipped).map((s) => s.date)),
     [sessions],
   )
   const scheduledDates = useMemo(() => new Set(agenda?.upcoming.map((u) => u.date) ?? []), [agenda])
@@ -208,10 +208,17 @@ export function Today() {
   )
 
   const groups = useMemo(() => groupByExercise(sets), [sets])
-  const volumeKg = useMemo(() => totalVolumeKg(sets), [sets])
+  // Warm-up ramps are real sets but not training (M8.6) — the day's headline numbers and the
+  // section progress read work sets only. `groups` stays on the full list so "Also logged" and
+  // the per-lift breakdown still show everything that was logged.
+  const workAll = useMemo(() => workSets(sets), [sets])
+  const volumeKg = useMemo(() => totalVolumeKg(workAll), [workAll])
   // Sections + their live set counts — "CHEST · 2/3 sets" on the rail.
   const sections = useMemo(() => groupPicksBySection(planned?.picks ?? []), [planned])
-  const setCountOf = useMemo(() => new Map(groups.map((g) => [g.exerciseId, g.sets.length])), [groups])
+  const setCountOf = useMemo(
+    () => new Map(groupByExercise(workAll).map((g) => [g.exerciseId, g.sets.length])),
+    [workAll],
+  )
   // lifts logged outside the plan still surface, under "Also logged".
   const extraGroups = useMemo(() => {
     if (!planned) return groups
@@ -230,7 +237,10 @@ export function Today() {
   const restDay = Boolean(enrolled && agenda && !agenda.todayEntry) && !persisted && sets.length === 0
   // Today's plan day is on screen (committed or proposed) → the "current plan" card would just
   // repeat it. Read `planned`, not agenda.todayEntry, which nulls out once the day is committed.
-  const planDayShown = Boolean(enrolled && planned && planned.planId === enrolled.id)
+  // Today was deliberately passed on (M8.6). The rail is replaced by a hero + Undo; the plan card
+  // is deliberately allowed back so "next up" is visible right where the day used to be.
+  const skipped = planned?.skipped === true
+  const planDayShown = Boolean(enrolled && planned && planned.planId === enrolled.id) && !skipped
   // Today IS a training day, but resolveDay hasn't answered yet. Without this the empty-state and
   // the plan card flash for a beat on every cold open — the exact friction this screen removed.
   const proposalPending = todayDayId != null && !persisted && !proposal
@@ -243,7 +253,9 @@ export function Today() {
     <section>
       <h1 className="font-display text-3xl font-black tracking-tight">Today</h1>
       {firstName && <p className="mt-1 text-sm text-fog">Hey, <span className="font-bold text-chalk">{firstName}</span> 👋</p>}
-      {planned && (
+      {/* Hidden once the day is skipped — the hero below already names it, and offering
+          "Customize" on a day you just passed on invites editing something that isn't happening. */}
+      {planned && !skipped && (
         <div className="mt-1 flex items-baseline justify-between gap-3">
           <p className="truncate text-sm font-bold text-amber">{planned.label}</p>
           {customizeTo && (
@@ -257,9 +269,15 @@ export function Today() {
         </div>
       )}
 
-      <CalendarStrip today={date} doneDates={doneDates} scheduledDates={scheduledDates} scheduledLabels={scheduledLabels} />
+      <CalendarStrip
+        today={date}
+        doneDates={doneDates}
+        skippedDates={skippedDates}
+        scheduledDates={scheduledDates}
+        scheduledLabels={scheduledLabels}
+      />
 
-      <MotivationStrip userId={userId} date={date} unit={unit} lessonMuscles={lessonMuscles} sessions={sessions} />
+      <MotivationStrip userId={userId} date={date} unit={unit} lessonMuscles={lessonMuscles} sessions={trained} />
 
       {restDay && <RestDayHero />}
 
@@ -279,9 +297,11 @@ export function Today() {
         </button>
       )}
 
-      {planned ? (
+      {skipped && planned ? (
+        <SkippedHero label={planned.label} onUndo={() => sessionId && void unskipDay(sessionId)} />
+      ) : planned ? (
         <>
-          {sets.length > 0 && <Stats sets={sets.length} lifts={groups.length} volume={formatWeight(volumeKg, unit)} />}
+          {sets.length > 0 && <Stats sets={workAll.length} lifts={groups.length} volume={formatWeight(volumeKg, unit)} />}
           {/* Mobility sits OUTSIDE the circuit branch — a timed circuit deserves a warm-up too. */}
           <MobilityBlock
             title="Warm-up"
@@ -359,6 +379,13 @@ export function Today() {
             </div>
           )}
           <FinishControl session={session} ensureSession={ensureSession} />
+          {planned.planId && planned.dayId !== 'adhoc' && !session?.finishedAt && (
+            <SkipControl
+              label={planned.label}
+              hasSets={sets.length > 0}
+              onSkip={() => void skipDay(userId, planned)}
+            />
+          )}
         </>
       ) : proposalPending ? (
         <DaySkeleton />
@@ -370,7 +397,7 @@ export function Today() {
         )
       ) : (
         <>
-          <Stats sets={sets.length} lifts={groups.length} volume={formatWeight(volumeKg, unit)} />
+          <Stats sets={workAll.length} lifts={groups.length} volume={formatWeight(volumeKg, unit)} />
           <div className="mt-6">
             <LoggedGroups groups={groups} unit={unit} />
           </div>
@@ -528,6 +555,82 @@ function RestDayHero() {
   )
 }
 
+// Today was passed on (M8.6). Deliberately calm, not scolding — skipping is a legitimate call, and
+// the rotation has already moved on, which is the reassurance worth leading with. Undo strips the
+// flag (never tombstones the session), so the day comes straight back, still writable.
+function SkippedHero({ label, onUndo }: { label: string; onUndo: () => void }) {
+  return (
+    <div className="mt-6 text-center">
+      <div aria-hidden className="mx-auto grid size-16 place-items-center rounded-2xl bg-steel-800 text-4xl">
+        ⏭️
+      </div>
+      <h2 className="mt-3 font-display text-4xl font-black tracking-tight">Day skipped</h2>
+      <p className="mx-auto mt-1.5 max-w-xs text-sm text-fog">
+        <span className="font-bold text-chalk">{label}</span> is off the books — your plan has rolled
+        on to the next day.
+      </p>
+      <button
+        type="button"
+        onClick={onUndo}
+        className="mt-4 rounded-xl border border-steel-700 px-5 py-2.5 text-sm font-bold text-chalk transition-colors hover:border-amber hover:text-amber"
+      >
+        Undo skip
+      </button>
+    </div>
+  )
+}
+
+// Skip today's day. Two-tap confirm once sets exist (they survive the skip, but the day stops
+// counting as trained, so it's worth a beat). Inline rather than window.confirm — that's blocked in
+// some PWA display modes, and nothing else in this app uses it.
+function SkipControl({
+  label,
+  hasSets,
+  onSkip,
+}: {
+  label: string
+  hasSets: boolean
+  onSkip: () => void
+}) {
+  const [confirming, setConfirming] = useState(false)
+
+  if (confirming)
+    return (
+      <div className="mt-3 rounded-xl border border-steel-700 bg-steel-900 px-4 py-3">
+        <p className="text-sm text-fog">
+          Skip <span className="font-bold text-chalk">{label}</span>? Your logged sets stay, but the
+          day won't count as trained and the plan moves on.
+        </p>
+        <div className="mt-2.5 flex gap-2">
+          <button
+            type="button"
+            onClick={onSkip}
+            className="rounded-lg bg-amber px-4 py-2 text-sm font-bold text-ink transition-colors hover:bg-amber-bright"
+          >
+            Skip it
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            className="rounded-lg bg-steel-800 px-4 py-2 text-sm font-semibold text-fog transition-colors hover:text-chalk"
+          >
+            Keep going
+          </button>
+        </div>
+      </div>
+    )
+
+  return (
+    <button
+      type="button"
+      onClick={() => (hasSets ? setConfirming(true) : onSkip())}
+      className="mt-3 block w-full py-2 text-center text-sm font-semibold text-fog underline-offset-4 transition-colors hover:text-amber hover:underline"
+    >
+      Skip this day
+    </button>
+  )
+}
+
 // Demoted logging affordance for rest days — a quiet link, not the full empty-state block.
 function RestDayLog({ onStart }: { onStart: () => void }) {
   return (
@@ -594,6 +697,7 @@ function MotivationStrip({
       weightKg: s.weightKg,
       reps: s.reps,
       rir: s.rir,
+      note: s.note, // carries the warm-up marker so ramps can't become PR baselines
       createdAt: s.createdAt,
     }))
     const best = new Map<string, PR>()

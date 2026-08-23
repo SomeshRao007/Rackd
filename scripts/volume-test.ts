@@ -57,4 +57,16 @@ const backMuscles = Object.fromEntries(byId.back.muscles.map((m) => [m.muscle, m
 assert.equal(backMuscles.lats, 2, 'back breakdown shows lats worked')
 assert.equal(backMuscles.traps, 0, 'back breakdown surfaces untrained traps')
 
+
+// Warm-up ramps are real SetLogs but not training volume (M8.6) — covers the weekly dashboard
+// and volume-goal progress in one place, since both read perMuscleVolume.
+const ramp = { ...mk('bench', 40, 5, recent), note: 'Warm-up' }
+const work = mk('bench', 100, 5, recent)
+assert.deepEqual(
+  perMuscleVolume([ramp, work], muscleOf),
+  { chest: { sets: 1, volumeKg: 500 } },
+  'a ramp adds neither a set nor volume',
+)
+assert.deepEqual(perMuscleVolume([ramp], muscleOf), {}, 'ramps only → no tally at all')
+
 console.log('✓ volume test passed (per-muscle, rolling window, group folding, neglected-muscle surfacing)')

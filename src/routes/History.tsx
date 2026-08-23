@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { useRxData } from '../db/useRxData'
 import type { Session, SetLog } from '../db/schema'
-import { useUnit, formatWeight } from '../lib/units'
+import { useUnit, formatLoad } from '../lib/units'
 import { groupByExercise } from '../components/groupSets'
+import { parsePlannedDay } from '../lib/plannedDay'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -72,6 +73,12 @@ function SessionCard({ session }: { session: Session }) {
     undefined,
     { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' },
   )
+  // `session.title` is never written by anything, so every card used to fall back to the date and
+  // read as untitled. The committed day's label is the name the user actually knows it by — and a
+  // skipped day needs it most, since it has no sets to describe itself with.
+  const planned = useMemo(() => parsePlannedDay(session.plannedDay), [session.plannedDay])
+  const skipped = planned?.skipped === true
+  const heading = session.title || planned?.label || dateLabel
 
   return (
     <li className="overflow-hidden rounded-xl bg-steel-900">
@@ -85,10 +92,15 @@ function SessionCard({ session }: { session: Session }) {
           {new Date(session.date + 'T00:00:00').getDate()}
         </span>
         <span className="flex-1">
-          <span className="block font-semibold">
-            {session.title || dateLabel}
+          <span className="flex items-center gap-2">
+            <span className="truncate font-semibold">{heading}</span>
+            {skipped && (
+              <span className="shrink-0 rounded-full border border-steel-600 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-steel-500">
+                Skipped
+              </span>
+            )}
           </span>
-          {session.title && (
+          {heading !== dateLabel && (
             <span className="block text-xs text-fog">{dateLabel}</span>
           )}
         </span>
@@ -103,7 +115,9 @@ function SessionCard({ session }: { session: Session }) {
       {open && (
         <div className="border-t border-steel-800 px-4 py-3">
           {groups.length === 0 ? (
-            <p className="py-2 text-center text-sm text-fog">No sets recorded.</p>
+            <p className="py-2 text-center text-sm text-fog">
+              {skipped ? 'You skipped this day — the plan rolled on to the next one.' : 'No sets recorded.'}
+            </p>
           ) : (
             <div className="space-y-3">
               {groups.map((g) => (
@@ -111,7 +125,7 @@ function SessionCard({ session }: { session: Session }) {
                   <h3 className="text-sm font-bold">{g.exerciseName}</h3>
                   <p className="nums mt-0.5 text-sm text-fog">
                     {g.sets
-                      .map((s) => `${formatWeight(s.weightKg, unit)} × ${s.reps}`)
+                      .map((s) => `${formatLoad(s.weightKg, unit)} × ${s.reps}`)
                       .join('   ·   ')}
                   </p>
                 </div>

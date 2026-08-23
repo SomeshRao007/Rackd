@@ -121,6 +121,12 @@ export function usePrefs(): Prefs {
 /** Built-in equipment types plus the user's custom ones — the full selectable/filterable vocabulary. */
 export const allEquipmentTypes = (prefs: Prefs): string[] => [...ALL_EQUIPMENT, ...prefs.customEquipment]
 
+/** Needs no kit: the catalog's 'body only' tag, or '' (unset — e.g. a programmatically created
+ *  custom exercise). Extracted from equipmentAvailable so the logger's bodyweight mode (M8.6)
+ *  and the generation filter can't drift apart on what counts as bodyweight. */
+export const isBodyweightEquipment = (equipment: string): boolean =>
+  equipment === 'body only' || equipment === ''
+
 /** True if an exercise's equipment is usable given the available set (bodyweight always passes). */
 export const equipmentAvailable = (equipment: string, available: string[]): boolean =>
-  equipment === 'body only' || equipment === '' || available.includes(equipment)
+  isBodyweightEquipment(equipment) || available.includes(equipment)

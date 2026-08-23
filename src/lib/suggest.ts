@@ -2,7 +2,7 @@
 // Weights in KG (canonical); the UI converts for display.
 // ponytail: reason strings quote kg even for lb users (the seeded input IS converted); localize if family lb users complain.
 import type { SchemeId } from '../db/schema'
-import { epley1RM, roundToStep } from './lifting'
+import { epley1RM, roundToStep, isWarmupSet } from './lifting'
 import { daysBetween } from './dates'
 
 export type HistorySet = {
@@ -10,6 +10,7 @@ export type HistorySet = {
   weightKg: number
   reps: number
   rir?: number | null
+  note?: string | null // WARMUP_NOTE marks a ramp set — filtered out below
   createdAt: string
 }
 export type Suggestion = { weightKg: number; targetReps: number; reason: string }
@@ -51,7 +52,11 @@ export function suggestNext(opts: {
   stepKg?: number
   readinessFactor?: number // M7 C5: <1 eases today's load for a low recovery score
 }): Suggestion | null {
-  const { history, scheme, today } = opts
+  const { scheme, today } = opts
+  // Drop warm-up ramps FIRST (M8.6). Not cosmetic: `topW` below is the max of the last session's
+  // sets, so a session containing only ramps — warm up at 40 kg, get interrupted, never log the
+  // 60 kg work set — would otherwise prescribe 40 kg next time and walk the lifter backwards.
+  const history = opts.history.filter((s) => !isWarmupSet(s))
   if (history.length === 0) return null
 
   // Last session's sets → heaviest weight, best reps at it, hardest logged RIR at it.

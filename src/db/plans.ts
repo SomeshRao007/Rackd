@@ -7,6 +7,7 @@ import type { PlanSchedule } from '../lib/schedule'
 import { groupOf, GROUP_LABELS, type MuscleGroupId } from '../lib/muscles'
 import { findEquivalent, substituteInDays, type SubstitutionSummary } from '../lib/substitute'
 import { isMobility, isWarmupMove, rotateBy } from '../lib/mobility'
+import { insertIndexForSection } from '../lib/daySections'
 import { customToExercise } from './customExercises'
 
 const now = () => new Date().toISOString()
@@ -414,6 +415,27 @@ export async function lockDay(userId: string, planned: PlannedDay): Promise<stri
   return session.id
 }
 
+/** Pass on today's scheduled day (M8.6). Writes the day with `skipped` set, which is what makes
+ *  the rotation move past it (`lastCompletedDay`) while never counting as a training day. Zero
+ *  schema: the flag rides inside the plannedDay blob, an opaque TEXT column to /sync. */
+export async function skipDay(userId: string, planned: PlannedDay): Promise<string> {
+  return lockDay(userId, { ...planned, skipped: true })
+}
+
+/** Undo a skip by STRIPPING the flag — deliberately NOT by tombstoning the session.
+ *  `getOrCreateTodaySession` looks today's row up by primary key without checking `deletedAt`, and
+ *  `materializeDay` only writes when `plannedDay` is empty, so a tombstoned row would still be
+ *  handed to every later `logSet` — and those sets would then be invisible to every screen (they
+ *  all select `deletedAt: null`). Stripping the flag leaves the day committed and writable. */
+export async function unskipDay(sessionId: string): Promise<void> {
+  const db = await getDb()
+  const doc = await db.sessions.findOne(sessionId).exec()
+  if (!doc?.plannedDay) return
+  const planned = JSON.parse(doc.plannedDay) as PlannedDay
+  delete planned.skipped
+  await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
+}
+
 /** Commit today's proposed day, but ONLY if nothing is there yet — the implicit path, run off the
  *  first real interaction (log a set, re-time a hold, tap Finish). Write-if-absent is what makes a
  *  late duplicate call a no-op instead of a lost update: Today's `ensureSession` closes over a
@@ -429,17 +451,24 @@ export async function materializeDay(userId: string, planned: PlannedDay): Promi
 
 // Add an ad-hoc exercise to today's locked day mid-session (defaults to 2×10 so it joins the
 // green-indicator system). Flagged `added` so it can later be saved into the plan.
+//
+// `slotLabel` decides which section the lift joins — the caller resolves it (sectionLabelFor needs
+// the catalog, which this function has no access to). The INDEX is computed here instead, against
+// the freshly-read blob: a caller looping over a multi-select batch would otherwise splice every
+// pick after the first against a stale array.
 export async function addPickToDay(
   sessionId: string,
   ex: { id: string; name: string; primaryMuscles?: string[] },
+  slotLabel?: string,
 ): Promise<void> {
   const db = await getDb()
   const doc = await db.sessions.findOne(sessionId).exec()
   if (!doc?.plannedDay) return
   const planned = JSON.parse(doc.plannedDay) as PlannedDay
-  planned.picks.push({
+  const label = slotLabel || ex.primaryMuscles?.[0] || 'Added'
+  planned.picks.splice(insertIndexForSection(planned.picks, label), 0, {
     slotId: crypto.randomUUID(),
-    slotLabel: ex.primaryMuscles?.[0] ?? 'Added',
+    slotLabel: label,
     exerciseId: ex.id,
     exerciseName: ex.name,
     pool: [ex.id],

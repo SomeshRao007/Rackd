@@ -6,7 +6,7 @@ import type { Exercise, SetLog, CustomExercise } from '../db/schema'
 import { BodyMap } from '../components/BodyMap'
 import { CreateCustomExercise } from '../components/CreateCustomExercise'
 import { customToExercise, deleteCustomExercise } from '../db/customExercises'
-import { useUnit, formatWeight, type Unit } from '../lib/units'
+import { useUnit, formatWeight, formatLoad, type Unit } from '../lib/units'
 import { epley1RM } from '../lib/lifting'
 import { mediaSources } from '../lib/exerciseMedia'
 
@@ -271,7 +271,7 @@ function Records({ sets, unit }: { sets: SetLog[]; unit: Unit }) {
                 <li key={s.id} className="flex items-center justify-between rounded-xl bg-steel-900 px-4 py-2.5 text-sm">
                   <span className="text-fog">Set {i + 1}</span>
                   <span className="nums font-semibold text-chalk">
-                    {formatWeight(s.weightKg, unit)} × {s.reps}
+                    {formatLoad(s.weightKg, unit)} × {s.reps}
                     {s.rir != null && <span className="ml-2 text-fog">RIR {s.rir}</span>}
                   </span>
                 </li>

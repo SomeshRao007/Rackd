@@ -5,9 +5,9 @@ import { logSet, suggestFor, deleteSet } from '../db/actions'
 import { setPickMinSets, setPickExercise, saveAddedPickToPlan } from '../db/plans'
 import { suggestAlternatives } from '../lib/substitute'
 import { addExclusion } from '../db/exclusions'
-import { warmupSets, platesFor } from '../lib/lifting'
-import { usePrefs, setBarKg } from '../lib/prefs'
-import { type Unit, useUnit, unitToKg, kgToUnit, formatWeight } from '../lib/units'
+import { warmupSets, platesFor, workSets, WARMUP_NOTE } from '../lib/lifting'
+import { usePrefs, setBarKg, isBodyweightEquipment } from '../lib/prefs'
+import { type Unit, useUnit, unitToKg, kgToUnit, formatWeight, formatLoad } from '../lib/units'
 import { SetRow } from './SetRow'
 import { RirChips } from './RirChips'
 import { ExerciseInfoLink } from './ExerciseInfoLink'
@@ -55,9 +55,13 @@ export function PlannedExerciseRow({
     [sessionId, pick.exerciseId],
   )
 
-  const latest = sets[sets.length - 1] ?? null
+  // Warm-up ramp sets are real SetLogs (M8.6) but must never advance the target — two ramp taps
+  // shouldn't paint a 2-set goal green. Every count on this row reads work sets only; the logger
+  // below still lists all of them so ramps stay visible and deletable.
+  const work = useMemo(() => workSets(sets), [sets])
+  const latest = work[work.length - 1] ?? null
   const min = pick.minSets ?? 0
-  const done = min > 0 && sets.length >= min // green: logged at least the target number of sets
+  const done = min > 0 && work.length >= min // green: logged at least the target number of sets
 
   return (
     <li
@@ -74,23 +78,23 @@ export function PlannedExerciseRow({
         >
           <span
             className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-black ${
-              done ? 'bg-green-500 text-ink' : sets.length > 0 ? 'bg-amber text-ink' : 'border border-steel-700 text-fog'
+              done ? 'bg-green-500 text-ink' : work.length > 0 ? 'bg-amber text-ink' : 'border border-steel-700 text-fog'
             }`}
           >
-            {done ? '✓' : sets.length > 0 ? sets.length : ''}
+            {done ? '✓' : work.length > 0 ? work.length : ''}
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-semibold">{pick.exerciseName}</span>
             {/* No slot label here — the section header above the row already says "Side delts". */}
             <span className="text-xs uppercase tracking-wide text-fog">
-              {min > 0 ? `${sets.length}/${min} sets` : 'log a set'}
+              {min > 0 ? `${work.length}/${min} sets` : 'log a set'}
               {pick.targetReps ? ` · ${pick.targetReps} reps` : ''}
               {pick.substituted && <span className="text-amber"> · subbed for your kit</span>}
             </span>
           </span>
           {latest && (
             <span className="nums shrink-0 text-sm font-bold text-chalk">
-              {formatWeight(latest.weightKg, unit)} <span className="text-fog">×</span> {latest.reps}
+              {formatLoad(latest.weightKg, unit)} <span className="text-fog">×</span> {latest.reps}
             </span>
           )}
           <svg
@@ -166,6 +170,16 @@ function InlineLogger({
   const { barKg, equipment } = usePrefs()
   const repsRef = useRef<HTMLInputElement>(null)
 
+  // Bodyweight mode (M8.6): push-ups shouldn't demand a load, and until now a 0 kg set couldn't be
+  // logged at all (`canLog` required w > 0), so they were unloggable from a planned row.
+  // The kit tells us the DEFAULT; the seeded suggestion below refines it, so a lift you've loaded
+  // before (weighted dips) reopens in weight mode — history is the memory, no extra persistence.
+  const kitFree = isBodyweightEquipment(equipmentOf.get(pick.exerciseId) ?? '')
+  const [body, setBody] = useState(kitFree)
+  const modeTouched = useRef(false) // an explicit +Add weight / Bodyweight tap outranks a re-seed
+  // User has edited weight/reps since the last seed → don't overwrite their entry mid-set.
+  const dirty = useRef(false)
+
   // Same-muscle catalog alternatives doable with the user's kit. Ranked against the POOL (not the
   // current pick) so the list stays stable when you swap onto one of its entries.
   const alts = useMemo(() => {
@@ -175,24 +189,39 @@ function InlineLogger({
     return suggestAlternatives(poolExs, catalog, equipment, new Set(pick.pool))
   }, [pick.pool, catalog, equipment])
 
-  // Seed once from the progression engine (M5); async .then → not a sync setState-in-effect.
+  // Work sets logged for this exercise — the re-seed trigger below.
+  // Deliberately NOT `sets` (a fresh array identity on every RxDB emission) and NOT `sets.length`
+  // (which a warm-up ramp tap would move, re-seeding the work prescription off the ramp weight).
+  const workCount = useMemo(() => workSets(sets).length, [sets])
+
+  // Re-seed from the progression engine (M5) whenever the work-set count changes (M8.6).
+  // `suggestFor` already reads freshly-logged sets — the old `[]` deps are the whole reason
+  // closing and reopening the card was the only way to refresh the recommendation.
+  // Guarded by `dirty`, NOT by input focus: onLog ends with repsRef.focus(), so a focus guard
+  // would suppress the re-seed in the exact flow that reported the bug.
   useEffect(() => {
+    if (dirty.current) return
     let alive = true
     suggestFor(userId, pick.exerciseId, scheme, deload).then((s) => {
       if (!alive) return
       if (!s) {
+        // No history left (the last work set was deleted) → back to the calibration prompt.
         setCalibrate(true)
+        setReason('')
         return
       }
-      setWeight(String(Math.round(kgToUnit(s.weightKg, unit) * 2) / 2))
+      setCalibrate(false)
+      if (!modeTouched.current) setBody(s.weightKg <= 0)
+      setWeight(s.weightKg > 0 ? String(Math.round(kgToUnit(s.weightKg, unit) * 2) / 2) : '')
       setReps(String(s.targetReps))
       setReason(s.reason)
     })
     return () => {
       alive = false
     }
+    // `unit` is intentionally out: re-seeding on a unit switch would clobber an in-progress entry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [workCount, userId, pick.exerciseId, scheme, deload])
 
   // Every write below materializes today's day first — before that point the session doesn't exist
   // yet, by design: opening Today must not create anything. ensureSession is idempotent.
@@ -213,9 +242,10 @@ function InlineLogger({
 
   const w = Number(weight)
   const r = Number(reps)
-  const canLog = w > 0 && Number.isInteger(r) && r > 0
-  const wKg = w > 0 ? unitToKg(w, unit) : 0
-  const warmups = warmupSets(wKg)
+  // Bodyweight sets log at 0 kg, so reps alone are enough to enable Log.
+  const canLog = Number.isInteger(r) && r > 0 && (body || w > 0)
+  const wKg = body ? 0 : w > 0 ? unitToKg(w, unit) : 0
+  const warmups = warmupSets(wKg) // 0 kg → [] , so Body mode hides the ramp badges for free
   const plateLoaded = PLATE_LOADED.has(equipmentOf.get(pick.exerciseId) ?? '')
   const plates = platesFor(wKg, barKg)
   const muscle = muscleOf.get(pick.exerciseId)
@@ -233,7 +263,28 @@ function InlineLogger({
       note: note || null,
     })
     setNote('') // RIR intentionally kept — stable set to set
+    // Cleared BEFORE the resulting workCount change lands, so the next emission re-seeds instead
+    // of being treated as an in-progress edit. A ref, not state: as state it would either sit in
+    // the effect's deps (re-firing on every keystroke) or go stale inside the closure.
+    dirty.current = false
     repsRef.current?.focus()
+  }
+
+  // A warm-up ramp badge logs a REAL set at its own weight/reps (M8.6), marked via `note` so
+  // progression, PRs, volume and the set target all skip it. Deliberately not a prefill: writing
+  // into the shared inputs would destroy the work prescription the user needs 90 seconds later.
+  // Undo is the trash icon already on every row of the set list below.
+  async function onLogWarmup(wu: { kg: number; reps: number }) {
+    await logSet({
+      userId,
+      sessionId: await ensureSession(),
+      exerciseId: pick.exerciseId,
+      exerciseName: pick.exerciseName,
+      weightKg: wu.kg,
+      reps: wu.reps,
+      rir: null,
+      note: WARMUP_NOTE,
+    })
   }
 
   const toggle = (p: Panel) => setPanel((cur) => (cur === p ? 'none' : p))
@@ -362,10 +413,18 @@ function InlineLogger({
       {warmups.length > 0 && (
         <div className="mt-2 flex items-center gap-2 text-xs">
           <span className="font-semibold uppercase tracking-wide text-fog">Warm-up</span>
+          {/* Tap to log the ramp set — it joins the list below marked "Warm-up" but counts toward
+              nothing: not the set target, not volume, not PRs, not the next prescription. */}
           {warmups.map((wu) => (
-            <span key={wu.kg} className="nums rounded bg-steel-800 px-2 py-1 font-bold text-chalk">
-              {formatWeight(wu.kg, unit)}
-            </span>
+            <button
+              key={wu.kg}
+              type="button"
+              onClick={() => void onLogWarmup(wu)}
+              aria-label={`Log warm-up set: ${formatWeight(wu.kg, unit)} for ${wu.reps} reps`}
+              className="nums rounded bg-steel-800 px-2 py-1 font-bold text-chalk transition-colors hover:bg-amber hover:text-ink"
+            >
+              {formatWeight(wu.kg, unit)} <span className="opacity-60">× {wu.reps}</span>
+            </button>
           ))}
         </div>
       )}
@@ -373,7 +432,9 @@ function InlineLogger({
       {reason && <p className="mt-3 text-xs font-semibold text-amber">↗ {reason}</p>}
       {calibrate && (
         <p className="mt-3 text-xs text-fog">
-          First time? Enter a weight you could lift about 8 times — your first set seeds the progression.
+          {body
+            ? 'First time? Log a set of about 8 reps — your first set seeds the progression.'
+            : 'First time? Enter a weight you could lift about 8 times — your first set seeds the progression.'}
         </p>
       )}
 
@@ -385,18 +446,34 @@ function InlineLogger({
         className="mt-3 space-y-2"
       >
         <div className="grid grid-cols-[1fr_1fr_auto] items-stretch gap-2">
-          <Field label={`Weight (${unit})`}>
-            <input
-              type="number" inputMode="decimal" step="0.5" min="0"
-              value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="0"
-              className="nums w-full bg-transparent text-center text-2xl font-black text-chalk outline-none placeholder:text-steel-700"
-            />
-          </Field>
+          {body ? (
+            <Field label="Load">
+              <span className="nums block text-center text-2xl font-black text-chalk">BW</span>
+            </Field>
+          ) : (
+            <Field label={`Weight (${unit})`}>
+              <input
+                type="number" inputMode="decimal" step="0.5" min="0"
+                value={weight}
+                onChange={(e) => {
+                  dirty.current = true
+                  setWeight(e.target.value)
+                }}
+                placeholder="0"
+                className="nums w-full bg-transparent text-center text-2xl font-black text-chalk outline-none placeholder:text-steel-700"
+              />
+            </Field>
+          )}
           <Field label="Reps">
             <input
               ref={repsRef}
               type="number" inputMode="numeric" step="1" min="1"
-              value={reps} onChange={(e) => setReps(e.target.value)} placeholder="0"
+              value={reps}
+              onChange={(e) => {
+                dirty.current = true
+                setReps(e.target.value)
+              }}
+              placeholder="0"
               className="nums w-full bg-transparent text-center text-2xl font-black text-chalk outline-none placeholder:text-steel-700"
             />
           </Field>
@@ -408,6 +485,22 @@ function InlineLogger({
             Log
           </button>
         </div>
+        {/* Escape hatch both ways. Gated on `kitFree || body` rather than `kitFree` alone so a
+            non-bodyweight lift the engine put in Body mode (all its logged sets were 0 kg) can
+            always get its weight field back. */}
+        {(kitFree || body) && (
+          <button
+            type="button"
+            onClick={() => {
+              modeTouched.current = true
+              if (body) setWeight('')
+              setBody((b) => !b)
+            }}
+            className="text-xs font-semibold text-fog underline-offset-4 transition-colors hover:text-amber hover:underline"
+          >
+            {body ? '+ Add weight' : 'Just bodyweight'}
+          </button>
+        )}
         <RirChips value={rir} onChange={setRir} />
         <input
           type="text"

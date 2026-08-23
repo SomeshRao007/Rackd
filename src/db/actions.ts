@@ -3,7 +3,8 @@ import { suggestNext, deloadDue, type Suggestion } from '../lib/suggest'
 import { todayISO, weekIndex } from '../lib/dates'
 import { readinessScore, readinessFactor } from '../lib/readiness'
 import { todayReadiness } from './readiness'
-import type { PlannedDay, SchemeId, Session, SetLog } from './schema'
+import { parsePlannedDay } from '../lib/plannedDay'
+import type { SchemeId, Session, SetLog } from './schema'
 
 const now = () => new Date().toISOString()
 const today = () => new Date().toISOString().slice(0, 10) // YYYY-MM-DD
@@ -122,16 +123,6 @@ export async function suggestFor(
   return suggestNext({ history, scheme, today: todayISO(), deload, readinessFactor: factor })
 }
 
-// JSON.parse is the one boundary here that can throw (corrupt synced string) — contain it.
-function parsePlannedDay(json: string | null | undefined): PlannedDay | null {
-  if (!json) return null
-  try {
-    return JSON.parse(json) as PlannedDay
-  } catch {
-    return null
-  }
-}
-
 /** Deload-banner input (M5): weeks trained since the last accepted deload + recent RIR trend. */
 export async function deloadStatus(userId: string): Promise<string | null> {
   const db = await getDb()
@@ -146,7 +137,10 @@ export async function deloadStatus(userId: string): Promise<string | null> {
     .exec()
   let lastDeloadWeek = -Infinity
   for (const s of sessions) {
-    if (parsePlannedDay(s.plannedDay)?.deload === true) {
+    // A deload day that was SKIPPED was never taken — counting it would reset the deload clock
+    // and hide the fact that the lifter is still accumulating fatigue (M8.6).
+    const pd = parsePlannedDay(s.plannedDay)
+    if (pd?.deload === true && pd.skipped !== true) {
       lastDeloadWeek = weekIndex(s.date)
       break
     }
