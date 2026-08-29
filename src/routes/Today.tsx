@@ -350,6 +350,8 @@ export function Today() {
                           muscleOf={muscleOf}
                           equipmentOf={equipmentOf}
                           catalog={allEx}
+                          planId={planned.planId}
+                          dayId={planned.dayId}
                         />
                       ))}
                     </ul>

@@ -18,6 +18,13 @@ assert.deepEqual(warmupSets(0), [], 'no last weight → no warm-up sets')
 assert.deepEqual(platesFor(60), [20], '60kg = 20 bar + 20 per side')
 assert.deepEqual(platesFor(100), [20, 20], '100kg = 20 bar + 40 per side (20+20)')
 assert.deepEqual(platesFor(132.5), [20, 20, 15, 1.25], '132.5kg = 20 bar + 56.25 per side')
+// Only the plates you own (M8.7): no 2.5s or 1.25s on the rack ⇒ the stack under-shoots rather
+// than inventing a plate. 97.5 kg → 20 bar + 35/side is unreachable, closest is 20+15+5 = 90.
+assert.deepEqual(platesFor(97.5, 20, [20, 15, 10, 5]), [20, 15], 'restricted inventory under-shoots')
+assert.deepEqual(platesFor(60, 20, [10]), [10, 10], 'repeats the only plate it has')
+// Warm-up rungs round to the equipment step, so a 5 kg stack never shows a 2.5 kg rung.
+assert.ok(warmupSets(60, 5).every((w) => w.kg % 5 === 0), 'ramp rungs land on the 5 kg step')
+
 assert.deepEqual(platesFor(20), [], 'empty bar → no plates')
 assert.deepEqual(platesFor(15), [], 'below bar weight → no plates')
 

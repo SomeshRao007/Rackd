@@ -82,15 +82,29 @@ async function create(): Promise<WorkoutDatabase> {
 }
 
 // Bump together with the catalog JSON filename to push a new catalog to clients.
-const CATALOG_VERSION = 4 // v4 (M8.4): +10 hand-authored warm-up/cooldown moves (~2,042)
+const CATALOG_VERSION = 5 // v5 (M8.7): duplicate movements + camera-angle variants collapsed (~1,937)
 
-/** Seed/refresh the catalog. Idempotent: re-seeds only when the version changed. */
+/** Seed/refresh the catalog. Idempotent: re-seeds only when the version changed.
+ *  bulkUpsert can't delete, so a version that DROPS records (the M8.7 dedup) also has to remap
+ *  anything referencing them and then prune — in that order, or the remap loses its name lookup. */
 export async function seedCatalog(): Promise<void> {
   if (localStorage.getItem('wa_catalog_v') === String(CATALOG_VERSION)) return
   const db = await getDb()
   const res = await fetch('/catalog/exercises.v1.json')
   if (!res.ok) return
-  const exercises = await res.json()
+  const exercises: { id: string; name: string }[] = await res.json()
   await db.exercises.bulkUpsert(exercises) // upsert → re-seed is idempotent
+
+  const aliases: Record<string, string> = await fetch('/catalog/aliases.v1.json')
+    .then((r) => (r.ok ? r.json() : {}))
+    .catch(() => ({}))
+  const dropped = Object.keys(aliases)
+  if (dropped.length > 0) {
+    const { remapExerciseIds } = await import('./catalogAliases')
+    await remapExerciseIds(db, aliases, new Map(exercises.map((e) => [e.id, e.name])))
+    // Tombstones rather than physically deleting (RxDB's model) — every query already excludes
+    // `_deleted`, so the duplicates vanish from the app; the dead rows are local-only and unsynced.
+    await db.exercises.bulkRemove(dropped)
+  }
   localStorage.setItem('wa_catalog_v', String(CATALOG_VERSION))
 }

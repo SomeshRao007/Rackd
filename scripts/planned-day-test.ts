@@ -4,7 +4,7 @@
  * Run: tsx scripts/planned-day-test.ts  (also part of `npm test`)
  */
 import assert from 'node:assert/strict'
-import { parsePlannedDay, isSkipped, trainedSessions, lastCompletedDay } from '../src/lib/plannedDay.ts'
+import { parsePlannedDay, isSkipped, trainedSessions, lastCompletedDay, carryablePicks } from '../src/lib/plannedDay.ts'
 
 const day = (planId: string, dayId: string, extra: Record<string, unknown> = {}) =>
   JSON.stringify({ planId, dayId, label: dayId, picks: [], ...extra })
@@ -80,4 +80,23 @@ assert.deepEqual(
   'newest by date wins across a mixed, unordered list',
 )
 
-console.log('planned-day-test: OK — contained parse, skip filtering, rotation advances on finish OR skip')
+// ── carryablePicks: the "added exercise shows twice on Today" fix ────────────
+const pick = (slotId: string, added = false) =>
+  ({ slotId, slotLabel: 'x', exerciseId: 'e', exerciseName: 'e', added }) as never
+
+// Save-to-plan reuses the pick's slotId for the new plan slot, so the SAME id arrives from both
+// sides on the next Apply. The plan's copy must win, or Today renders the lift twice.
+assert.deepEqual(carryablePicks([pick('s1', true)], [pick('s1')]), [], 'saved lift is not carried again')
+assert.deepEqual(
+  carryablePicks([pick('s1', true)], [pick('s2')]).map((p) => p.slotId),
+  ['s1'],
+  'an unsaved add still rides along',
+)
+assert.deepEqual(
+  carryablePicks([pick('s1', true)], [pick('s1'), pick('s1~1')]).map((p) => p.slotId),
+  [],
+  'a multi-movement slot still matches on its base slotId',
+)
+assert.deepEqual(carryablePicks([], [pick('s1')]), [], 'nothing added → nothing carried')
+
+console.log('planned-day-test: OK — contained parse, skip filtering, rotation advances on finish OR skip, carry dedup')

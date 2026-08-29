@@ -4,14 +4,16 @@ import { useAuth } from '../auth/AuthContext'
 import { useDb, useRxData } from '../db/useRxData'
 import type { Exercise, CustomExercise, MobilityStep, Plan, PlanDay, PlannedDay, PlannedPick, SchemeId, Readiness } from '../db/schema'
 import { customToExercise } from '../db/customExercises'
-import { resolveDay, lockDay } from '../db/plans'
+import { resolveDay, lockDay, saveAddedPickToPlan, addToSlotPool } from '../db/plans'
 import { deloadStatus, todaySession } from '../db/actions'
 import { fitToBudget, mobilityMinutes } from '../db/generate'
+import { carryablePicks } from '../lib/plannedDay'
 import { SCHEMES, DELOAD_SET_FACTOR } from '../lib/suggest'
 import { usePrefs, setBudgetMin } from '../lib/prefs'
 import { todayReadiness, logReadiness } from '../db/readiness'
 import { readinessScore, readinessLabel } from '../lib/readiness'
 import { MobilityBlock } from '../components/MobilityBlock'
+import { ExercisePicker } from '../components/ExercisePicker'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -53,6 +55,12 @@ export function StartDay() {
   // Today's committed day, when this screen is opened mid-session as "Customize". Applying then
   // has to merge rather than replace — see onApply.
   const [committed, setCommitted] = useState<PlannedDay | null>(null)
+  // Lifts added straight onto Today. They belong to the session, not the plan, so `resolveDay`
+  // knows nothing about them — before M8.7 they were invisible here and only smuggled through
+  // onApply, which is why an exercise you added never showed up on Customize.
+  const [addedPicks, setAddedPicks] = useState<PlannedPick[]>([])
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [poolSlot, setPoolSlot] = useState<string | null>(null)
   // Budget/deload changed during this visit → the user asked for a refit, so the fresh set targets
   // win over their committed ones. Untouched → they came to swap movements, keep their edits.
   const [refitSets, setRefitSets] = useState(false)
@@ -93,6 +101,8 @@ export function StartDay() {
         setPlan(p)
         setDay(found)
         setCommitted(seed)
+        setSessionId(sess?.id ?? null)
+        setAddedPicks(seed?.picks.filter((x) => x.added) ?? [])
         setBasePicks(resolved.picks)
         setSel(seedSelection(resolved.picks, seed))
         setWarmup(seed?.warmup ?? resolved.warmup ?? [])
@@ -163,14 +173,19 @@ export function StartDay() {
     [basePicks, sel, nameOf],
   )
 
-  const picks = useMemo(() => {
-    if (circuit) return expanded // timed circuit: fixed stations, no set-budget fitting
-    const fitted = fitToBudget(expanded, exMap, prefs.budgetMin, mobMin, { restSec: prefs.restSec, workSec: prefs.workSec, maxSets: prefs.maxSets })
-    if (!deload) return fitted
-    return fitted.map((p) =>
+  // Added lifts go through the budget with everything else — leaving them out let the time budget
+  // under-count a day the user had already added two exercises to.
+  const fitted = useMemo(() => {
+    const all = [...expanded, ...addedPicks]
+    if (circuit) return all // timed circuit: fixed stations, no set-budget fitting
+    const out = fitToBudget(all, exMap, prefs.budgetMin, mobMin, { restSec: prefs.restSec, workSec: prefs.workSec, maxSets: prefs.maxSets })
+    if (!deload) return out
+    return out.map((p) =>
       p.minSets != null ? { ...p, minSets: Math.max(1, Math.round(p.minSets * DELOAD_SET_FACTOR)) } : p,
     )
-  }, [expanded, exMap, prefs.budgetMin, mobMin, prefs.restSec, prefs.workSec, prefs.maxSets, deload, circuit])
+  }, [expanded, addedPicks, exMap, prefs.budgetMin, mobMin, prefs.restSec, prefs.workSec, prefs.maxSets, deload, circuit])
+  const picks = useMemo(() => fitted.filter((p) => !p.added), [fitted])
+  const addedFitted = useMemo(() => fitted.filter((p) => p.added), [fitted])
 
   // Tap on = add the movement to this slot, tap off = drop it; the last one can't be removed.
   const toggle = (slotId: string, exId: string) =>
@@ -187,11 +202,14 @@ export function StartDay() {
   async function onApply() {
     if (!plan || !day) return
     const prevBySlot = new Map((committed?.picks ?? []).map((p) => [p.slotId, p]))
-    const merged = picks.map((p) => {
+    const keepEdits = (p: PlannedPick) => {
       const prev = prevBySlot.get(p.slotId)
       return !refitSets && prev?.minSets != null ? { ...p, minSets: prev.minSets } : p
-    })
-    const carried = (committed?.picks ?? []).filter((p) => p.added)
+    }
+    const merged = picks.map(keepEdits)
+    // A lift already saved into the plan arrives from BOTH sides here — the plan's copy wins.
+    // That double row is the bug this filter exists for; the rule is unit-tested.
+    const carried = carryablePicks(addedFitted, merged).map(keepEdits)
     await lockDay(userId, {
       planId: plan.id,
       dayId: day.id,
@@ -204,6 +222,26 @@ export function StartDay() {
       ...(circuit ? { mode: 'circuit' as const, ...circuit } : {}),
     })
     navigate('/app/today')
+  }
+
+  /** Persist an added lift into the plan so it recurs. Its pool is just itself — "+ Add movement"
+   *  on the slot card is what gives it something to rotate with. */
+  async function savePick(slotId: string) {
+    if (!sessionId) return
+    await saveAddedPickToPlan(sessionId, slotId)
+    setAddedPicks((cur) => cur.map((p) => (p.slotId === slotId ? { ...p, savedToPlan: true } : p)))
+  }
+
+  /** Add rotation alternatives to a slot. Written straight to the plan (not staged behind Apply) —
+   *  it changes future days, not today's, so there's nothing for Apply to commit. Left unlit: it's
+   *  an alternative for next time, not a swap for right now. */
+  async function addToPool(slotId: string, exIds: string[]) {
+    if (!plan || !day) return
+    await addToSlotPool(plan.id, day.id, slotId, exIds)
+    const fresh = (pool: string[]) => [...pool, ...exIds.filter((id) => !pool.includes(id))]
+    setBasePicks((cur) => cur.map((p) => (p.slotId === slotId ? { ...p, pool: fresh(p.pool ?? []) } : p)))
+    setDay((d) => d && { ...d, slots: d.slots.map((s) => (s.id === slotId ? { ...s, exercisePool: fresh(s.exercisePool) } : s)) })
+    setPoolSlot(null)
   }
 
   async function saveCheckin() {
@@ -360,7 +398,7 @@ export function StartDay() {
         </label>
       )}
 
-      {picks.length === 0 ? (
+      {fitted.length === 0 ? (
         <p className="mt-6 rounded-xl border border-dashed border-steel-700 px-4 py-8 text-center text-sm text-fog">
           This day has no exercises yet.{' '}
           <Link to={`/app/plans/${plan.id}`} className="font-semibold text-amber">
@@ -419,16 +457,64 @@ export function StartDay() {
                       )
                     })}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setPoolSlot(base.slotId)}
+                    className="mt-2 text-xs font-semibold text-fog transition-colors hover:text-amber"
+                  >
+                    + Add movement
+                  </button>
                 </li>
               )
             })}
           </ul>
 
+          {/* Lifts added on Today. Editable here now — dropping one or saving it into the plan both
+              used to need a trip back to Today, and until M8.7 they didn't render here at all. */}
+          {addedFitted.length > 0 && (
+            <>
+              <h2 className="mt-5 text-xs font-bold uppercase tracking-widest text-amber">Added today</h2>
+              <ul className="mt-2 space-y-2">
+                {addedFitted.map((p) => (
+                  <li key={p.slotId} className="flex items-center gap-2 rounded-xl border border-steel-800 bg-steel-900 px-3 py-2.5">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold">{p.exerciseName}</span>
+                      <span className="text-xs uppercase tracking-wide text-fog">
+                        {p.slotLabel}
+                        {p.minSets != null && <span className="nums"> · {p.minSets}×{p.targetReps}</span>}
+                      </span>
+                    </span>
+                    {p.savedToPlan ? (
+                      <span className="shrink-0 text-xs font-bold uppercase tracking-wide text-green-400">✓ In plan</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void savePick(p.slotId)}
+                        className="shrink-0 rounded-lg bg-steel-800 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-fog transition-colors hover:bg-amber hover:text-ink"
+                      >
+                        Save to plan
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setAddedPicks((cur) => cur.filter((x) => x.slotId !== p.slotId))}
+                      aria-label={`Remove ${p.exerciseName}`}
+                      className="grid size-8 shrink-0 place-items-center rounded-lg text-steel-600 transition-colors hover:bg-steel-800 hover:text-red-400"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-xs text-fog">Saved lifts come back every time this day runs. Add alternatives to a section above to let one rotate.</p>
+            </>
+          )}
+
           <MobilityBlock title="Cooldown" steps={cooldown} nameOf={nameOf} onChange={setCooldown} pattern="cooldown" />
         </>
       )}
 
-      {picks.length > 0 && (
+      {fitted.length > 0 && (
         <div className="fixed inset-x-0 bottom-16 z-10 mx-auto max-w-lg px-4">
           <button
             type="button"
@@ -438,6 +524,15 @@ export function StartDay() {
             Apply changes
           </button>
         </div>
+      )}
+
+      {poolSlot && (
+        <ExercisePicker
+          title="Add a movement"
+          exclude={day.slots.find((s) => s.id === poolSlot)?.exercisePool ?? []}
+          onPickMany={(es) => void addToPool(poolSlot, es.map((e) => e.id))}
+          onClose={() => setPoolSlot(null)}
+        />
       )}
     </section>
   )

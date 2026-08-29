@@ -116,11 +116,12 @@ export async function suggestFor(
   exerciseId: string,
   scheme: SchemeId,
   deload = false,
+  stepKg?: number,
 ): Promise<Suggestion | null> {
   const history = await historyFor(userId, exerciseId)
   const rd = await todayReadiness(userId, todayISO())
   const factor = rd ? readinessFactor(readinessScore(rd)) : 1
-  return suggestNext({ history, scheme, today: todayISO(), deload, readinessFactor: factor })
+  return suggestNext({ history, scheme, today: todayISO(), deload, stepKg, readinessFactor: factor })
 }
 
 /** Deload-banner input (M5): weeks trained since the last accepted deload + recent RIR trend. */

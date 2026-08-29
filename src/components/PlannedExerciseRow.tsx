@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRxData } from '../db/useRxData'
 import type { Exercise, SetLog, PlannedPick, SchemeId } from '../db/schema'
 import { logSet, suggestFor, deleteSet } from '../db/actions'
-import { setPickMinSets, setPickExercise, saveAddedPickToPlan } from '../db/plans'
+import { setPickMinSets, setPickExercise, saveAddedPickToPlan, removePickFromDay, removeSlotFromPlan } from '../db/plans'
 import { suggestAlternatives } from '../lib/substitute'
 import { addExclusion } from '../db/exclusions'
 import { warmupSets, platesFor, workSets, WARMUP_NOTE } from '../lib/lifting'
-import { usePrefs, setBarKg, isBodyweightEquipment } from '../lib/prefs'
+import { usePrefs, setBarKg, setExerciseStep, stepFor, isBodyweightEquipment } from '../lib/prefs'
 import { type Unit, useUnit, unitToKg, kgToUnit, formatWeight, formatLoad } from '../lib/units'
 import { SetRow } from './SetRow'
 import { RirChips } from './RirChips'
@@ -29,6 +29,8 @@ export function PlannedExerciseRow({
   muscleOf,
   equipmentOf,
   catalog,
+  planId,
+  dayId,
 }: {
   pick: PlannedPick
   sessionId: string | null
@@ -40,6 +42,8 @@ export function PlannedExerciseRow({
   muscleOf: Map<string, string>
   equipmentOf: Map<string, string>
   catalog: Exercise[]
+  planId?: string
+  dayId?: string
 }) {
   const unit = useUnit()
   const [open, setOpen] = useState(false)
@@ -74,7 +78,7 @@ export function PlannedExerciseRow({
           type="button"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
-          className="flex flex-1 items-center gap-3 py-3 pl-4 pr-2 text-left"
+          className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-2 text-left"
         >
           <span
             className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-black ${
@@ -104,7 +108,7 @@ export function PlannedExerciseRow({
             <path d="m9 18 6-6-6-6" />
           </svg>
         </button>
-        <div className="pr-2">
+        <div className="shrink-0 pr-2">
           <ExerciseInfoLink exerciseId={pick.exerciseId} label={pick.exerciseName} showText />
         </div>
       </div>
@@ -123,13 +127,15 @@ export function PlannedExerciseRow({
           muscleOf={muscleOf}
           equipmentOf={equipmentOf}
           catalog={catalog}
+          planId={planId}
+          dayId={dayId}
         />
       )}
     </li>
   )
 }
 
-type Panel = 'none' | 'swap' | 'plates' | 'rest'
+type Panel = 'none' | 'swap' | 'load' | 'rest' | 'remove'
 
 function InlineLogger({
   pick,
@@ -144,6 +150,8 @@ function InlineLogger({
   muscleOf,
   equipmentOf,
   catalog,
+  planId,
+  dayId,
 }: {
   pick: PlannedPick
   ensureSession: () => Promise<string>
@@ -157,6 +165,8 @@ function InlineLogger({
   muscleOf: Map<string, string>
   equipmentOf: Map<string, string>
   catalog: Exercise[]
+  planId?: string
+  dayId?: string
 }) {
   const [minSets, setMinSets] = useState(initialMin ? String(initialMin) : '')
   const [weight, setWeight] = useState('')
@@ -167,14 +177,21 @@ function InlineLogger({
   const [note, setNote] = useState('')
   const [panel, setPanel] = useState<Panel>('none')
   const [restedMsg, setRestedMsg] = useState('')
-  const { barKg, equipment } = usePrefs()
+  const prefs = usePrefs()
+  const { barKg, equipment } = prefs
   const repsRef = useRef<HTMLInputElement>(null)
+
+  // Smallest jump this lift can actually make (M8.7): its own override, else what its kit allows.
+  // Everything that moves a load reads it — the next-weight suggestion, the warm-up rungs, and the
+  // weight field's arrows — so a 4.5 kg leg press stops being prescribed 2.5 kg it can't load.
+  const equip = equipmentOf.get(pick.exerciseId) ?? ''
+  const stepKg = stepFor(prefs, equip, pick.exerciseId)
 
   // Bodyweight mode (M8.6): push-ups shouldn't demand a load, and until now a 0 kg set couldn't be
   // logged at all (`canLog` required w > 0), so they were unloggable from a planned row.
   // The kit tells us the DEFAULT; the seeded suggestion below refines it, so a lift you've loaded
   // before (weighted dips) reopens in weight mode — history is the memory, no extra persistence.
-  const kitFree = isBodyweightEquipment(equipmentOf.get(pick.exerciseId) ?? '')
+  const kitFree = isBodyweightEquipment(equip)
   const [body, setBody] = useState(kitFree)
   const modeTouched = useRef(false) // an explicit +Add weight / Bodyweight tap outranks a re-seed
   // User has edited weight/reps since the last seed → don't overwrite their entry mid-set.
@@ -202,7 +219,7 @@ function InlineLogger({
   useEffect(() => {
     if (dirty.current) return
     let alive = true
-    suggestFor(userId, pick.exerciseId, scheme, deload).then((s) => {
+    suggestFor(userId, pick.exerciseId, scheme, deload, stepKg).then((s) => {
       if (!alive) return
       if (!s) {
         // No history left (the last work set was deleted) → back to the calibration prompt.
@@ -221,7 +238,7 @@ function InlineLogger({
     }
     // `unit` is intentionally out: re-seeding on a unit switch would clobber an in-progress entry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workCount, userId, pick.exerciseId, scheme, deload])
+  }, [workCount, userId, pick.exerciseId, scheme, deload, stepKg])
 
   // Every write below materializes today's day first — before that point the session doesn't exist
   // yet, by design: opening Today must not create anything. ensureSession is idempotent.
@@ -232,6 +249,16 @@ function InlineLogger({
   }
   const swapTo = async (exId: string) => setPickExercise(await ensureSession(), pick.slotId, exId)
   const saveToPlan = async () => saveAddedPickToPlan(await ensureSession(), pick.slotId)
+  const dropToday = async () => removePickFromDay(await ensureSession(), pick.slotId)
+  const dropEverywhere = async () => {
+    if (planId && dayId) await removeSlotFromPlan(planId, dayId, pick.slotId)
+    await dropToday()
+  }
+  // A `~n` slotId is one movement of a SHARED slot — deleting that slot would take its siblings
+  // with it, so those only get the session-scoped remove.
+  const inPlan =
+    Boolean(planId) && Boolean(dayId) && dayId !== 'adhoc' && !pick.slotId.includes('~') &&
+    (!pick.added || pick.savedToPlan === true)
   // Resting commits the day too, so today stays exactly what's on screen — which is what the
   // confirmation promises ("won't change today's session"); the exclusion only shapes future days.
   const rest = async (kind: 'exercise' | 'muscle', value: string, label: string) => {
@@ -245,9 +272,12 @@ function InlineLogger({
   // Bodyweight sets log at 0 kg, so reps alone are enough to enable Log.
   const canLog = Number.isInteger(r) && r > 0 && (body || w > 0)
   const wKg = body ? 0 : w > 0 ? unitToKg(w, unit) : 0
-  const warmups = warmupSets(wKg) // 0 kg → [] , so Body mode hides the ramp badges for free
-  const plateLoaded = PLATE_LOADED.has(equipmentOf.get(pick.exerciseId) ?? '')
-  const plates = platesFor(wKg, barKg)
+  const warmups = warmupSets(wKg, stepKg) // 0 kg → [] , so Body mode hides the ramp badges for free
+  const plateLoaded = PLATE_LOADED.has(equip)
+  const plates = platesFor(wKg, barKg, prefs.plateKg)
+  // What the plates you own actually make. The greedy stack silently under-shoots an unreachable
+  // target, which is worse than saying so.
+  const loadable = barKg + plates.reduce((a, b) => a + b, 0) * 2
   const muscle = muscleOf.get(pick.exerciseId)
 
   async function onLog() {
@@ -291,13 +321,14 @@ function InlineLogger({
 
   return (
     <div className="border-t border-steel-800 px-4 pb-4 pt-3">
-      {/* Toolbar: swap exercise / plate math / rest this / save-to-plan (M4) */}
-      <div className="mb-3 flex gap-2 text-xs font-bold uppercase tracking-wide">
+      {/* Toolbar: swap exercise / load setup / rest this / remove / save-to-plan (M4, M8.7) */}
+      <div className="mb-3 flex flex-wrap gap-2 text-xs font-bold uppercase tracking-wide">
         {pick.pool && (pick.pool.length > 1 || alts.length > 0) && (
           <Tool active={panel === 'swap'} onClick={() => toggle('swap')}>Swap</Tool>
         )}
-        {plateLoaded && <Tool active={panel === 'plates'} onClick={() => toggle('plates')}>Plates</Tool>}
+        <Tool active={panel === 'load'} onClick={() => toggle('load')}>Load</Tool>
         <Tool active={panel === 'rest'} onClick={() => toggle('rest')}>Rest</Tool>
+        <Tool active={panel === 'remove'} onClick={() => toggle('remove')}>Remove</Tool>
         {pick.added && (
           pick.savedToPlan ? (
             <span className="rounded-lg px-3 py-1.5 text-green-400">✓ In plan</span>
@@ -343,6 +374,19 @@ function InlineLogger({
         </div>
       )}
 
+      {panel === 'remove' && (
+        <div className="mb-3 rounded-lg bg-steel-800 px-3 py-2.5">
+          <p className="text-sm text-chalk">Remove <span className="font-bold">{pick.exerciseName}</span>?</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <RestButton onClick={() => void dropToday()}>Just today</RestButton>
+            {inPlan && <RestButton onClick={() => void dropEverywhere()}>Remove from plan too</RestButton>}
+          </div>
+          {inPlan && (
+            <p className="mt-2 text-xs text-fog">“Just today” leaves it in the plan — it’s back next time this day runs.</p>
+          )}
+        </div>
+      )}
+
       {panel === 'rest' && (
         <div className="mb-3">
           {restedMsg ? (
@@ -364,34 +408,64 @@ function InlineLogger({
         </div>
       )}
 
-      {panel === 'plates' && plateLoaded && (
-        <div className="mb-3 rounded-lg bg-steel-800 px-3 py-2 text-sm">
+      {panel === 'load' && (
+        <div className="mb-3 space-y-1.5 rounded-lg bg-steel-800 px-3 py-2 text-sm">
           <label className="flex items-center justify-between gap-3">
-            <span className="text-xs font-semibold uppercase tracking-wide text-fog">Bar weight</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-fog">Weight step</span>
             <span className="flex items-baseline gap-1">
               <input
                 type="number"
                 inputMode="decimal"
-                step="2.5"
+                step="0.5"
                 min="0"
-                value={barKg}
-                onChange={(e) => setBarKg(Number(e.target.value) || 0)}
-                aria-label="Bar weight in kg"
-                className="nums w-14 bg-transparent text-right text-base font-black text-chalk outline-none"
+                value={prefs.exerciseSteps[pick.exerciseId] ?? ''}
+                onChange={(e) => setExerciseStep(pick.exerciseId, Number(e.target.value) || 0)}
+                placeholder={String(stepKg)}
+                aria-label="Weight increment for this exercise in kg"
+                className="nums w-14 bg-transparent text-right text-base font-black text-chalk outline-none placeholder:text-steel-600"
               />
               <span className="text-fog">kg</span>
             </span>
           </label>
-          <p className="mt-1.5">
-            {plates.length > 0 ? (
-              <>
-                <span className="font-semibold text-fog">Per side: </span>
-                <span className="nums font-bold text-chalk">{plates.join(' + ')} kg</span>
-              </>
-            ) : (
-              <span className="text-fog">Enter a weight above the {barKg}kg bar to see the plate stack.</span>
-            )}
+          <p className="text-xs text-fog">
+            {prefs.exerciseSteps[pick.exerciseId]
+              ? 'This machine only. Clear the box to go back to the default.'
+              : `Inherited from ${equip || 'bodyweight'} — override it if this one jumps differently.`}
           </p>
+
+          {plateLoaded && (
+            <>
+              <label className="flex items-center justify-between gap-3 border-t border-steel-700 pt-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-fog">Bar weight</span>
+                <span className="flex items-baseline gap-1">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="2.5"
+                    min="0"
+                    value={barKg}
+                    onChange={(e) => setBarKg(Number(e.target.value) || 0)}
+                    aria-label="Bar weight in kg"
+                    className="nums w-14 bg-transparent text-right text-base font-black text-chalk outline-none"
+                  />
+                  <span className="text-fog">kg</span>
+                </span>
+              </label>
+              <p>
+                {plates.length > 0 ? (
+                  <>
+                    <span className="font-semibold text-fog">Per side: </span>
+                    <span className="nums font-bold text-chalk">{plates.join(' + ')} kg</span>
+                    {Math.abs(loadable - wKg) > 0.01 && (
+                      <span className="text-amber"> · closest you can load is {loadable} kg</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-fog">Enter a weight above the {barKg}kg bar to see the plate stack.</span>
+                )}
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -452,6 +526,10 @@ function InlineLogger({
             </Field>
           ) : (
             <Field label={`Weight (${unit})`}>
+              {/* step stays 0.5, NOT the equipment increment: `step` is a VALIDATION rule, and a
+                  4.5 kg increment would make "40" a stepMismatch and silently block the submit —
+                  you must always be able to log what you actually lifted. The increment does its
+                  job in the suggestion and the warm-up rungs. */}
               <input
                 type="number" inputMode="decimal" step="0.5" min="0"
                 value={weight}

@@ -30,17 +30,19 @@ session eases itself on days you report as run-down.
   reps by movement role and sets grown greedily with compounds first, using your own rest and
   working-set timings. Filters by your environment and available equipment. Each slot's anchor lift
   is always proposed when it survives filtering, so main lifts progress uninterrupted. An optional
-  "Customize" screen adds alternative movements to a slot or re-times the day; each exercise gets its
-  own independent logger and budget allocation, and lifts can be swapped mid-session.
-- **Progression & intensity** — Double progression (reps 8→12, then +2.5 kg) or linear (% of
-  estimated 1RM). Bodyweight lifts log reps-only (shown as BW × reps, e.g., BW × 12).
-  Suggests next-session weight and reps from your history and RIR, estimates 1RM via Epley,
-  regresses load after a break, and offers a deload when fatigue accumulates.
+  "Customize" screen adds alternative movements to a slot or re-times the day; added movements appear
+  grouped on Today and can be saved back to the plan. Each exercise gets its own independent logger and
+  budget allocation, and lifts can be swapped mid-session.
+- **Progression & intensity** — Double progression (reps 8→12, then equipment-aware load jump) or linear
+  (% of estimated 1RM). Per-equipment weight increments (barbell/cable 2.5 kg, dumbbell 2 kg, machine
+  5 kg, etc.) with per-exercise overrides for stubborn machines. Bodyweight lifts log reps-only (shown
+  as BW × reps, e.g., BW × 12). Suggests next-session weight and reps from your history and RIR,
+  estimates 1RM via Epley, regresses load after a break, and offers a deload when fatigue accumulates.
 - **Equipment-aware substitution** — No barbell? "Use dumbbells instead" rewrites a plan's barbell
   lifts to dumbbell equivalents. Slots that match nothing in your kit auto-swap to a catalog
   equivalent, labelled so you can see it happened.
-- **Exercise library** — 2,042 exercises (including 134 stretches), searchable and filterable by muscle group, movement
-  pattern, and equipment. 1,287 carry animated demonstration GIFs. Detail cards show worked muscles
+- **Exercise library** — 1,937 exercises (including 134 stretches), searchable and filterable by muscle group, movement
+  pattern, and equipment. 1,254 carry animated demonstration GIFs. Detail cards show worked muscles
   on an anatomical body map, instructions, and your cross-session records. When building a plan or
   adding exercises mid-session, you can multi-select exercises at once and view inline details without
   losing your selection. Add your own custom exercises with an optional category (Strength or Mobility) — 
@@ -55,11 +57,14 @@ session eases itself on days you report as run-down.
   countdown with a progress ring and audio cues.
 - **In-session tools** — Warm-up sets stepped down from your last working weight, tap one to log
   it (it's recorded but kept out of your set targets, volume, PRs and progression), per-side
-  barbell plate math (with an editable bar weight), editable mobility warm-up and cooldown blocks
-  (add/remove moves, adjust hold times 15–60s; ticked-off moves persist across a reload) on a
-  countdown, mid-workout swaps, and add-an-exercise — which files itself under the matching muscle
-  section of the day — that can be saved back into the plan so it recurs. Tweaked something? Rest a
-  single lift or a whole muscle group, temporarily or permanently.
+  barbell plate math built from the plates you actually own (set in Settings), editable
+  mobility warm-up and cooldown blocks (add/remove moves, adjust hold times 15–60s; ticked-off moves
+  persist across a reload) on a countdown, mid-workout swaps, and add-an-exercise — which files itself
+  under the matching muscle section of the day — that can be saved back into the plan so it recurs.
+  Each exercise row also carries a Load panel — the weight step this lift actually jumps in, plus the
+  bar weight and per-side stack on barbell lifts — and a Remove control that drops the lift from just
+  this session or from the plan for good. Tweaked something? Rest a single lift or a whole muscle
+  group, temporarily or permanently.
 - **Accounts & sync** — Email/password or Google sign-in, with name and date of birth captured at
   signup and editable later in Settings. Sign in on another device and everything is restored.
 - **Installable PWA** — Add to home screen, kg↔lb toggle, and full JSON data export.
@@ -91,8 +96,8 @@ Browser (PWA, React + Vite)
   │   ├─ bodymetrics            — weight + measurements log
   │   ├─ readiness              — daily recovery check-in, one row per day
   │   └─ customexercises        — user-created exercises with tagged muscles
-  ├─ localStorage               — device-local environment, equipment, and sex prefs
-  ├─ static exercise catalog    — seeded once, versioned JSON
+  ├─ localStorage               — device-local environment, equipment, weight increments, plates, and sex prefs
+  ├─ static exercise catalog    — seeded once, versioned JSON (exercises.v1.json + aliases.v1.json)
   ├─ body-map SVG paths         — anatomical male/female muscle map
   └─ JWT held client-side
         │  (online only)

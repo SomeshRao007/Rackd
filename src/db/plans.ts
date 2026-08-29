@@ -465,6 +465,9 @@ export async function addPickToDay(
   const doc = await db.sessions.findOne(sessionId).exec()
   if (!doc?.plannedDay) return
   const planned = JSON.parse(doc.plannedDay) as PlannedDay
+  // Already on today's day — the picker excludes it, but a stale `exclude` list or a double-tap
+  // shouldn't be able to mint a second identical row.
+  if (planned.picks.some((p) => p.exerciseId === ex.id)) return
   const label = slotLabel || ex.primaryMuscles?.[0] || 'Added'
   planned.picks.splice(insertIndexForSection(planned.picks, label), 0, {
     slotId: crypto.randomUUID(),
@@ -545,6 +548,45 @@ export async function setPickMinSets(sessionId: string, slotId: string, minSets:
     p.slotId === slotId ? { ...p, minSets: minSets > 0 ? minSets : undefined } : p,
   )
   await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
+}
+
+/** Drop a lift from today's day. Session-scoped: a pick that came from a plan slot is back next
+ *  time this day runs — `removeSlotFromPlan` is the permanent version. */
+export async function removePickFromDay(sessionId: string, slotId: string): Promise<void> {
+  const db = await getDb()
+  const doc = await db.sessions.findOne(sessionId).exec()
+  if (!doc?.plannedDay) return
+  const planned = JSON.parse(doc.plannedDay) as PlannedDay
+  planned.picks = planned.picks.filter((p) => p.slotId !== slotId)
+  await doc.patch({ plannedDay: JSON.stringify(planned), updatedAt: now() })
+}
+
+/** Delete a slot from a plan day for good. Callers must pass a BASE slotId (no `~n` suffix) — a
+ *  `~n` pick is one movement of a shared slot, and removing that slot would take its siblings. */
+export async function removeSlotFromPlan(planId: string, dayId: string, slotId: string): Promise<void> {
+  const db = await getDb()
+  const doc = await db.plans.findOne(planId).exec()
+  if (!doc) return
+  const days = JSON.parse(doc.days) as PlanDay[]
+  const day = days.find((d) => d.id === dayId)
+  if (!day) return
+  day.slots = day.slots.filter((s) => s.id !== slotId)
+  await updatePlan(planId, { days: JSON.stringify(days) })
+}
+
+/** Append a movement to a plan slot's rotation pool (M8.7). A pool of one never rotates, so this is
+ *  what turns a lift saved from Today into something the rotation can actually alternate. */
+export async function addToSlotPool(planId: string, dayId: string, slotId: string, exerciseIds: string[]): Promise<void> {
+  const db = await getDb()
+  const doc = await db.plans.findOne(planId).exec()
+  if (!doc) return
+  const days = JSON.parse(doc.days) as PlanDay[]
+  const slot = days.find((d) => d.id === dayId)?.slots.find((s) => s.id === slotId)
+  if (!slot) return
+  const fresh = exerciseIds.filter((id) => !slot.exercisePool.includes(id))
+  if (fresh.length === 0) return
+  slot.exercisePool = [...slot.exercisePool, ...fresh]
+  await updatePlan(planId, { days: JSON.stringify(days) })
 }
 
 // ── Sharing (relative URLs → browser-correct; the node test shims a BASE) ───────

@@ -16,7 +16,7 @@ export type HistorySet = {
 export type Suggestion = { weightKg: number; targetReps: number; reason: string }
 
 // All tuning in one place.
-const DP = { repLo: 8, repHi: 12, rirTarget: 2, incKg: 2.5 } // double progression; ponytail: fixed 2.5 kg step — add per-equipment increments (dumbbell jumps) if rounding feels wrong
+const DP = { repLo: 8, repHi: 12, rirTarget: 2, incKg: 2.5 } // double progression; incKg is the fallback jump — the caller's stepKg (per-equipment / per-exercise, M8.7) wins
 const LIN = { reps: 5, basePct: 0.7, stepPct: 0.025, capPct: 0.85 } // linear % of e1RM
 const LIN_SESSIONS = 3 // e1RM lookback (distinct sessions) — robust to one bad day
 const BRK = { idleDays: 14, dropPerWeek: 0.05, floorPct: 0.7 } // break re-entry
@@ -67,7 +67,8 @@ export function suggestNext(opts: {
   const rirs = atTop.map((s) => s.rir).filter((r): r is number => r != null)
   const minRir = rirs.length ? Math.min(...rirs) : undefined
 
-  const out = scheme === 'linear' ? linearNext(history, topW) : doubleNext(topW, bestReps, minRir)
+  const step = opts.stepKg ?? DP.incKg
+  const out = scheme === 'linear' ? linearNext(history, topW) : doubleNext(topW, bestReps, minRir, step)
 
   // Break re-entry (both schemes): ≥2 idle weeks → drop 5%/week (floor 70%) and rebuild.
   const idle = daysBetween(history[0].createdAt.slice(0, 10), today)
@@ -93,16 +94,16 @@ export function suggestNext(opts: {
     out.reason = `Easing ${Math.round((1 - opts.readinessFactor) * 100)}% for recovery — ${out.reason}`
   }
 
-  if (out.weightKg > 0) out.weightKg = roundToStep(out.weightKg, opts.stepKg ?? 2.5)
+  if (out.weightKg > 0) out.weightKg = roundToStep(out.weightKg, step)
   return out
 }
 
-/** Double progression: fixed weight, climb 8→12 reps, then +2.5 kg. RIR optional but respected. */
-function doubleNext(topW: number, bestReps: number, minRir: number | undefined): Suggestion {
+/** Double progression: fixed weight, climb 8→12 reps, then up one `step`. RIR optional but respected. */
+function doubleNext(topW: number, bestReps: number, minRir: number | undefined, step: number): Suggestion {
   if (topW === 0) return { weightKg: 0, targetReps: bestReps + 1, reason: 'Bodyweight — add a rep' }
   if (bestReps >= DP.repHi) {
     if ((minRir ?? DP.rirTarget) >= DP.rirTarget)
-      return { weightKg: topW + DP.incKg, targetReps: DP.repLo, reason: '+2.5 kg — hit 12 @ RIR ≥2 last time' }
+      return { weightKg: topW + step, targetReps: DP.repLo, reason: `+${step} kg — hit 12 @ RIR ≥2 last time` }
     return { weightKg: topW, targetReps: DP.repHi, reason: `Hold — 12 reps but only RIR ${minRir}, make it crisper first` }
   }
   if (minRir === 0) return { weightKg: topW, targetReps: bestReps, reason: 'Hold — last session hit failure (RIR 0)' }

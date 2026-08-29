@@ -14,10 +14,27 @@ const FE_SRC = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/
 const FE_IMG_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/'
 const EDB_SRC = 'https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/exercises.json'
 const OUT = new URL('../public/catalog/exercises.v1.json', import.meta.url)
+const ALIAS_OUT = new URL('../public/catalog/aliases.v1.json', import.meta.url)
 
 const s = (v: unknown) => (typeof v === 'string' ? v : '')
 const arr = (v: unknown) => (Array.isArray(v) ? v.map(String) : [])
 const normName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+// ExerciseDB ships a handful of mis-encoded degree signs ("sled 45в° leg press").
+const fixEncoding = (name: string) => name.replace(/в°/g, '°')
+
+// A camera angle / demo-model / re-shoot marker on an otherwise identical movement.
+const VARIANT = /\((?:male|female|[a-z ]*pov)\)|\bv\.?\s*\d+\b/gi
+const isVariant = (name: string) => name.replace(VARIANT, '') !== name
+
+// Same movement ⇒ same key. Word ORDER is dropped ("Front Barbell Squat" ≡ "barbell front
+// squat" — 97 such pairs the old punctuation-only key let through), as are the variant markers
+// above. Anagram collisions are theoretically possible; all 97 groups were eyeballed, none are.
+const dedupKey = (name: string) =>
+  name.toLowerCase().replace(VARIANT, ' ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').sort().join(' ')
+
+// Display name of a survivor with no twin — "sissy squat (male)" is just a sissy squat.
+const tidyName = (name: string) => name.replace(VARIANT, '').replace(/\s{2,}/g, ' ').trim()
 
 type CatalogRecord = {
   id: string
@@ -113,7 +130,7 @@ let edbSkipped = 0
 let added = 0
 
 for (const r of edbRaw) {
-  const name = s(r.name).trim()
+  const name = fixEncoding(s(r.name).trim())
   const mediaId = s(r.media_id)
   if (!name || !mediaId) {
     edbSkipped++
@@ -176,21 +193,61 @@ for (const rec of CUSTOM_EXERCISES) {
   custom++
 }
 
+// ── 4. collapse duplicate movements ──────────────────────────────────────────
+// Runs as a POST-pass, deliberately: the id-minting loop above must stay byte-identical to the
+// previous build or kept records would shift ids (and orphan every plan/log referencing them).
+// Winner keeps its id and gains the loser's GIF; losers become aliases the client remaps to.
+// ponytail: `rank` is 3 buckets, not a scoring system — hand-authored ids are referenced by the
+// starter plans, free-exercise-db carries the curated instructions, everything else is fungible.
+const rank = (e: CatalogRecord) =>
+  (e.source === 'custom-seed' ? 0 : e.source === 'free-exercise-db' ? 2 : 4) + (isVariant(e.name) ? 1 : 0)
+
+const kept = new Map<string, CatalogRecord>()
+const aliases: Record<string, string> = {}
+for (const rec of catalog) {
+  const key = dedupKey(rec.name)
+  const cur = kept.get(key)
+  if (!cur) {
+    kept.set(key, rec)
+    continue
+  }
+  const [win, lose] = rank(rec) < rank(cur) ? [rec, cur] : [cur, rec]
+  win.gifId ??= lose.gifId
+  aliases[lose.id] = win.id
+  kept.set(key, win)
+}
+// A record that won one round and lost the next leaves a stale hop — follow it to the survivor.
+for (const id of Object.keys(aliases)) {
+  let target = aliases[id]
+  while (aliases[target]) target = aliases[target]
+  aliases[id] = target
+}
+const deduped = [...kept.values()].map((e) => ({ ...e, name: tidyName(e.name) }))
+
 await mkdir(new URL('.', OUT), { recursive: true })
-await writeFile(OUT, JSON.stringify(catalog, null, 2))
+await writeFile(OUT, JSON.stringify(deduped, null, 2))
+await writeFile(ALIAS_OUT, JSON.stringify(aliases, null, 2))
 
 // ── assertions ───────────────────────────────────────────────────────────────
-assert(catalog.length > 1800, `expected > 1800 records, got ${catalog.length}`)
-assert(new Set(catalog.map((e) => e.id)).size === catalog.length, 'duplicate ids')
-for (const e of catalog) {
+assert(deduped.length > 1800, `expected > 1800 records, got ${deduped.length}`)
+assert(new Set(deduped.map((e) => e.id)).size === deduped.length, 'duplicate ids')
+const keptIds = new Set(deduped.map((e) => e.id))
+for (const [from, to] of Object.entries(aliases)) {
+  assert(keptIds.has(to), `alias target dropped: ${from} → ${to}`)
+  assert(!keptIds.has(from), `alias source still in catalog: ${from}`)
+}
+for (const e of deduped) {
+  assert(e.name === tidyName(e.name), `variant suffix survived: ${e.name}`)
+  assert(!/в°/.test(e.name), `mojibake survived: ${e.name}`)
   assert(e.name, `empty name: ${e.id}`)
   assert(e.primaryMuscles.length > 0, `empty primaryMuscles: ${e.id}`)
   for (const url of e.images) assert(url.startsWith('https://'), `bad image url: ${url}`)
   if (e.gifId != null) assert(/^[A-Za-z0-9]+$/.test(e.gifId), `bad gifId: ${e.id} ${e.gifId}`)
 }
 
-const withGif = catalog.filter((e) => e.gifId).length
+const withGif = deduped.filter((e) => e.gifId).length
 console.log(`free-exercise-db: skipped ${feSkipped}`)
 console.log(`exercisedb: matched ${matched}, added ${added}, skipped ${edbSkipped}`)
 console.log(`custom-seed: added ${custom}`)
-console.log(`✓ catalog: ${catalog.length} exercises (${withGif} with GIF)`)
+console.log(`dedup: dropped ${Object.keys(aliases).length} duplicate movements`)
+console.log(`✓ catalog: ${deduped.length} exercises (${withGif} with GIF)`)

@@ -31,6 +31,13 @@ assert.equal(promo.targetReps, 8, 'promotion resets reps to 8')
 assert.ok(promo.reason.includes('+2.5'), 'promotion reason mentions +2.5')
 
 // 4. RIR-blocked promotion: 12 reps but RIR 0 → hold at 12 (rule order: 12-reps check wins over RIR-0 hold)
+// A 5 kg pin stack can't move in 2.5 kg. stepKg drives both the jump and what the reason claims.
+const stacked = suggestNext({ history: [set('s1', 60, 12, 2)], scheme: 'double', today: TODAY, stepKg: 5 })!
+assert.equal(stacked.weightKg, 65, 'stepKg sets the promotion jump')
+assert.match(stacked.reason, /\+5 kg/, 'reason quotes the real step, not a hardcoded 2.5')
+const dbell = suggestNext({ history: [set('s1', 10, 12, 2)], scheme: 'double', today: TODAY, stepKg: 2 })!
+assert.equal(dbell.weightKg, 12, 'a 2 kg dumbbell jump is honoured')
+
 const blocked = suggestNext({ history: [set('s1', 60, 12, 0)], scheme: 'double', today: TODAY })!
 assert.equal(blocked.weightKg, 60, 'RIR-blocked promotion holds weight')
 assert.equal(blocked.targetReps, 12, 'RIR-blocked promotion keeps target at 12')

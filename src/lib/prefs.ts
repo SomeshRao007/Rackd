@@ -12,6 +12,9 @@ export type Prefs = {
   restSec: number // rest interval between sets — feeds the time-budget estimate
   workSec: number // rough time to perform one working set
   maxSets: number // ceiling on sets per exercise the time budget will assign
+  increments: Record<string, number> // equipment → smallest load jump it allows
+  exerciseSteps: Record<string, number> // exerciseId → override for one stubborn machine
+  plateKg: number[] // plate sizes actually on the rack, heaviest first
 }
 
 // The 12 catalog equipment values (source: scripts/seed-catalog.ts output). 'body only' + ''
@@ -20,6 +23,19 @@ export const ALL_EQUIPMENT = [
   'barbell', 'dumbbell', 'cable', 'machine', 'body only', 'kettlebells',
   'bands', 'e-z curl bar', 'medicine ball', 'exercise ball', 'foam roll', 'other',
 ] as const
+
+// Smallest jump each kit allows. A gym's dumbbells go up in 2 kg, its pin stacks in 5, its plates
+// in 2.5 — a single global 2.5 kg step walks half of them wrong. Per-machine variance beyond this
+// (a 4.5 kg leg press next to a 2 kg lateral raise) is what `exerciseSteps` overrides.
+export const DEFAULT_INCREMENTS: Record<string, number> = {
+  barbell: 2.5, 'e-z curl bar': 2.5, dumbbell: 2, cable: 2.5, machine: 5, kettlebells: 4,
+  bands: 2.5, 'medicine ball': 1, 'exercise ball': 1, 'body only': 2.5, 'foam roll': 2.5, other: 2.5,
+}
+export const FALLBACK_STEP = 2.5
+
+// Plate sizes to offer in Settings; the default inventory is a standard commercial rack.
+export const ALL_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25, 1, 0.5]
+export const DEFAULT_PLATES = [20, 15, 10, 5, 2.5, 1.25]
 
 // home/gym presets pre-check a sensible subset; the user tweaks individual items afterwards.
 export const ENVIRONMENT_PRESETS: Record<Environment, string[]> = {
@@ -31,6 +47,7 @@ export const ENVIRONMENT_PRESETS: Record<Environment, string[]> = {
 // can't throw on a parse — no JSON, no try/catch.
 const K_ENV = 'wa_env', K_EQUIP = 'wa_equip', K_BUDGET = 'wa_budget', K_BAR = 'wa_bar'
 const K_REST = 'wa_rest', K_WORK = 'wa_work', K_MAXSETS = 'wa_maxsets', K_CUSTOM_EQUIP = 'wa_equip_custom'
+const K_INC = 'wa_inc', K_INC_EX = 'wa_inc_ex', K_PLATES = 'wa_plates'
 
 const readEnv = (): Environment => (localStorage.getItem(K_ENV) as Environment) || 'gym'
 const readEquip = (): string[] => {
@@ -47,16 +64,40 @@ const readBar = (): number => Number(localStorage.getItem(K_BAR)) || 20 // stand
 const readRest = (): number => Number(localStorage.getItem(K_REST)) || 120 // ~2 min between sets
 const readWork = (): number => Number(localStorage.getItem(K_WORK)) || 40 // ~40s to lift one set
 const readMaxSets = (): number => Number(localStorage.getItem(K_MAXSETS)) || 6 // budget set ceiling
+// "key:value,key:value" — same comma-joined idiom as equipment, so a read can't throw on a parse.
+// Keys are equipment names / exercise ids, neither of which contains a comma or a colon.
+const readMap = (key: string): Record<string, number> => {
+  const out: Record<string, number> = {}
+  for (const pair of (localStorage.getItem(key) || '').split(',')) {
+    const i = pair.lastIndexOf(':')
+    const n = Number(pair.slice(i + 1))
+    if (i > 0 && n > 0) out[pair.slice(0, i)] = n
+  }
+  return out
+}
+const writeMap = (key: string, map: Record<string, number>) =>
+  localStorage.setItem(key, Object.entries(map).map(([k, v]) => `${k}:${v}`).join(','))
+const readIncrements = (): Record<string, number> => ({ ...DEFAULT_INCREMENTS, ...readMap(K_INC) })
+const readPlates = (): number[] => {
+  const raw = localStorage.getItem(K_PLATES)
+  if (raw === null) return [...DEFAULT_PLATES]
+  return raw ? raw.split(',').map(Number).filter((n) => n > 0).sort((a, b) => b - a) : []
+}
 
 // Cached snapshot so useSyncExternalStore gets a stable reference between changes.
 let snapshot: Prefs = compute()
 function compute(): Prefs {
   // SSR/node-safe (tests import the db layer with no localStorage) → fall back to defaults.
   if (typeof localStorage === 'undefined')
-    return { environment: 'gym', equipment: [...ALL_EQUIPMENT], customEquipment: [], budgetMin: 0, barKg: 20, restSec: 120, workSec: 40, maxSets: 6 }
+    return {
+      environment: 'gym', equipment: [...ALL_EQUIPMENT], customEquipment: [], budgetMin: 0, barKg: 20,
+      restSec: 120, workSec: 40, maxSets: 6,
+      increments: { ...DEFAULT_INCREMENTS }, exerciseSteps: {}, plateKg: [...DEFAULT_PLATES],
+    }
   return {
     environment: readEnv(), equipment: readEquip(), customEquipment: readCustomEquip(), budgetMin: readBudget(),
     barKg: readBar(), restSec: readRest(), workSec: readWork(), maxSets: readMaxSets(),
+    increments: readIncrements(), exerciseSteps: readMap(K_INC_EX), plateKg: readPlates(),
   }
 }
 const listeners = new Set<() => void>()
@@ -111,6 +152,23 @@ export function setMaxSets(n: number) {
   emit()
 }
 
+export function setIncrement(equipment: string, kg: number) {
+  writeMap(K_INC, { ...readMap(K_INC), [equipment]: kg > 0 ? kg : DEFAULT_INCREMENTS[equipment] ?? FALLBACK_STEP })
+  emit()
+}
+/** Per-exercise override; 0 clears it and the equipment default takes over again. */
+export function setExerciseStep(exerciseId: string, kg: number) {
+  const map = readMap(K_INC_EX)
+  if (kg > 0) map[exerciseId] = kg
+  else delete map[exerciseId]
+  writeMap(K_INC_EX, map)
+  emit()
+}
+export function setPlates(plateKg: number[]) {
+  localStorage.setItem(K_PLATES, [...plateKg].sort((a, b) => b - a).join(','))
+  emit()
+}
+
 export function usePrefs(): Prefs {
   return useSyncExternalStore((cb) => {
     listeners.add(cb)
@@ -130,3 +188,8 @@ export const isBodyweightEquipment = (equipment: string): boolean =>
 /** True if an exercise's equipment is usable given the available set (bodyweight always passes). */
 export const equipmentAvailable = (equipment: string, available: string[]): boolean =>
   isBodyweightEquipment(equipment) || available.includes(equipment)
+
+/** Smallest load jump for one exercise: its own override, else what its kit allows, else 2.5 kg.
+ *  Drives the next-weight suggestion, the warm-up ramp rounding and the weight input's arrows. */
+export const stepFor = (prefs: Prefs, equipment: string | undefined, exerciseId: string): number =>
+  prefs.exerciseSteps[exerciseId] ?? prefs.increments[equipment ?? ''] ?? FALLBACK_STEP

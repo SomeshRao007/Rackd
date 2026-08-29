@@ -5,7 +5,7 @@
 //
 // Type-only import on purpose: a value import of ../db/schema drags all of rxdb into
 // scripts/planned-day-test.ts, which runs under plain tsx with no bundler.
-import type { PlannedDay } from '../db/schema'
+import type { PlannedDay, PlannedPick } from '../db/schema'
 
 /** The session fields these helpers read. Structural, so both RxDB docs and plain rows fit. */
 export type SessionLike = {
@@ -55,4 +55,13 @@ export function lastCompletedDay(
     if (!best || s.date > best.date) best = { date: s.date, dayId: pd.dayId }
   }
   return best
+}
+
+/** Ad-hoc picks worth carrying onto a re-applied day: the ones the plan's own slots don't already
+ *  provide. `saveAddedPickToPlan` mints the new plan slot REUSING the pick's slotId, so without
+ *  this filter a saved lift lands twice — once resolved from its slot, once carried as an add.
+ *  Base slotIds only: a `~n` pick is an extra movement of a shared slot. */
+export const carryablePicks = (added: PlannedPick[], fromPlan: PlannedPick[]): PlannedPick[] => {
+  const inPlan = new Set(fromPlan.map((p) => p.slotId.split('~')[0]))
+  return added.filter((p) => !inPlan.has(p.slotId))
 }

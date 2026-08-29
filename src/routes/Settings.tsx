@@ -8,7 +8,8 @@ import { addExclusion, removeExclusion } from '../db/exclusions'
 import { exportData } from '../db/actions'
 import {
   usePrefs, setEnvironment, setEquipment, setRestSec, setWorkSec, setMaxSets,
-  addCustomEquipment, removeCustomEquipment, ALL_EQUIPMENT, type Environment,
+  addCustomEquipment, removeCustomEquipment, setIncrement, setBarKg, setPlates,
+  ALL_EQUIPMENT, ALL_PLATES, allEquipmentTypes, type Environment,
 } from '../lib/prefs'
 import { MUSCLES } from '../lib/muscles'
 import { useSex, setSex, type Sex } from '../lib/sex'
@@ -131,6 +132,49 @@ export function Settings() {
         Your real per-set timing. The Start-day time budget uses rest + set time to decide how many
         sets fit, up to the max above. Reps are set by exercise type (heavy lifts lower, isolation higher).
       </p>
+
+      {/* Weight increments (M8.7) — the smallest jump each kit allows */}
+      <h2 className="mt-7 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Weight increments</h2>
+      <div className="space-y-2">
+        {allEquipmentTypes(prefs)
+          .filter((item) => prefs.equipment.includes(item))
+          .map((item) => (
+            <NumberPref
+              key={item}
+              label={item}
+              value={prefs.increments[item] ?? 2.5}
+              onChange={(n) => setIncrement(item, n)}
+              suffix="kg"
+              step="0.5"
+            />
+          ))}
+      </div>
+      <p className="mt-1.5 text-xs text-fog">
+        How much a load can actually go up on each kit — dumbbells in 2 kg, a pin stack in 5. The
+        next-weight suggestion and the warm-up ramp round to this. One odd machine? Open that
+        exercise on Today and set its step under <span className="font-semibold text-chalk">Load</span>.
+      </p>
+
+      {/* Barbell plates (M8.7) — what's actually on the rack, so "per side" is loadable */}
+      <h2 className="mt-7 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Barbell plates</h2>
+      <NumberPref label="Bar weight" value={prefs.barKg} onChange={setBarKg} suffix="kg" step="2.5" />
+      <div className="mt-2 flex flex-wrap gap-2">
+        {ALL_PLATES.map((kg) => {
+          const on = prefs.plateKg.includes(kg)
+          return (
+            <button
+              key={kg}
+              type="button"
+              onClick={() => setPlates(on ? prefs.plateKg.filter((p) => p !== kg) : [...prefs.plateKg, kg])}
+              aria-pressed={on}
+              className={`nums rounded-lg px-3 py-2 text-sm font-bold transition-colors ${on ? 'bg-amber text-ink' : 'bg-steel-800 text-fog hover:text-chalk'}`}
+            >
+              {kg} kg
+            </button>
+          )
+        })}
+      </div>
+      <p className="mt-1.5 text-xs text-fog">Pairs you own. The plate stack on a barbell lift is built from these only.</p>
 
       {/* Workout reminders (M7) — native Web Push; deploy-gated behind VAPID config */}
       <h2 className="mt-7 mb-2 text-sm font-bold uppercase tracking-wider text-fog">Workout reminders</h2>
