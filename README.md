@@ -1,10 +1,37 @@
-# Rackd
+<p align="center">
+  <img src="public/favicon.svg" alt="Rackd logo" width="112">
+</p>
 
-A workout tracker that's fast enough to use mid-set, offline-first, and shared with family.
+<h1 align="center">Rackd</h1>
+
+<p align="center">
+  A workout tracker that's fast enough to use mid-set, offline-first, and shared with family.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/React-19-F26F21?style=flat-square&logo=react&logoColor=white&labelColor=111111" alt="React 19">
+  <img src="https://img.shields.io/badge/TypeScript-6-F26F21?style=flat-square&logo=typescript&logoColor=white&labelColor=111111" alt="TypeScript 6">
+  <img src="https://img.shields.io/badge/Cloudflare-Pages%20%2B%20D1-F26F21?style=flat-square&logo=cloudflare&logoColor=white&labelColor=111111" alt="Cloudflare Pages and D1">
+  <img src="https://img.shields.io/badge/PWA-offline--first-F26F21?style=flat-square&logo=pwa&logoColor=white&labelColor=111111" alt="Offline-first PWA">
+</p>
+
+<p align="center">
+  <a href="https://rackd.someshrao.fyi/"><b>Open the live app →</b></a>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#tech-stack">Tech stack</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#deploy">Deploy</a> ·
+  <a href="#roadmap">Roadmap</a>
+</p>
+
+---
+
 Pick a lift, log weight + reps, and the app auto-fills your last numbers so logging takes one tap.
 No signal in the gym is fine — it syncs when you're back online.
-
-**Live:** [rackd.someshrao.fyi](https://rackd.someshrao.fyi/)
 
 Most trackers stop at logging. Rackd also decides **what you train next** — plan days rotate on
 a schedule you choose, weights and reps come from your own history and logged intensity, and the
@@ -12,9 +39,17 @@ session eases itself on days you report as run-down.
 
 ## Features
 
+### Logging & sync
+
 - **Offline-first logging** — RxDB on IndexedDB. The app is fully usable with no connection;
   writes replicate to Cloudflare D1 when you're back online (last-write-wins, no CRDTs). Log
   against a plan, or start a plan-free "Freestyle" session and log on the fly.
+- **Accounts & sync** — Email/password or Google sign-in, with name and date of birth captured at
+  signup and editable later in Settings. Sign in on another device and everything is restored.
+- **Installable PWA** — Add to home screen, kg↔lb toggle, and full JSON data export.
+
+### Plans & sessions
+
 - **Plans & scheduling** — Build a plan of days (Push/Pull/Legs) and slots, or adopt one of 10
   curated goal-tagged starter plans. Each slot has an anchor lift plus 4–5 alternatives so you can
   rotate equipment without losing progressive overload on the main movement. Enroll a plan with a
@@ -33,26 +68,6 @@ session eases itself on days you report as run-down.
   "Customize" screen adds alternative movements to a slot or re-times the day; added movements appear
   grouped on Today and can be saved back to the plan. Each exercise gets its own independent logger and
   budget allocation, and lifts can be swapped mid-session.
-- **Progression & intensity** — Double progression (reps 8→12, then equipment-aware load jump) or linear
-  (% of estimated 1RM). Per-equipment weight increments (barbell/cable 2.5 kg, dumbbell 2 kg, machine
-  5 kg, etc.) with per-exercise overrides for stubborn machines. Bodyweight lifts log reps-only (shown
-  as BW × reps, e.g., BW × 12). Suggests next-session weight and reps from your history and RIR,
-  estimates 1RM via Epley, regresses load after a break, and offers a deload when fatigue accumulates.
-- **Equipment-aware substitution** — No barbell? "Use dumbbells instead" rewrites a plan's barbell
-  lifts to dumbbell equivalents. Slots that match nothing in your kit auto-swap to a catalog
-  equivalent, labelled so you can see it happened.
-- **Exercise library** — 1,937 exercises (including 134 stretches), searchable and filterable by muscle group, movement
-  pattern, and equipment. 1,254 carry animated demonstration GIFs. Detail cards show worked muscles
-  on an anatomical body map, instructions, and your cross-session records. When building a plan or
-  adding exercises mid-session, you can multi-select exercises at once and view inline details without
-  losing your selection. Add your own custom exercises with an optional category (Strength or Mobility) — 
-  the app auto-tags the muscles they work from the name.
-- **Progress tracking** — Volume by muscle group over 7/14/30/365-day windows with drill-down to 17
-  individual muscles and a body-map heatmap. Weight-loss, strength, and hypertrophy goals with
-  adaptive suggestions. Body weight and measurements with a trend sparkline.
-- **Recovery & consistency** — A three-tap daily readiness check-in (sleep / soreness / energy)
-  produces a 0–100 score that feeds the progression engine. Training streaks forgive up to two rest
-  days, with a nudge when you fall off pace. Personal records are detected and celebrated.
 - **Timed circuits** — Plan days can define work/rest intervals and rounds, driven by an on-screen
   countdown with a progress ring and audio cues.
 - **In-session tools** — Warm-up sets stepped down from your last working weight, tap one to log
@@ -65,15 +80,39 @@ session eases itself on days you report as run-down.
   bar weight and per-side stack on barbell lifts — and a Remove control that drops the lift from just
   this session or from the plan for good. Tweaked something? Rest a single lift or a whole muscle
   group, temporarily or permanently.
-- **Accounts & sync** — Email/password or Google sign-in, with name and date of birth captured at
-  signup and editable later in Settings. Sign in on another device and everything is restored.
-- **Installable PWA** — Add to home screen, kg↔lb toggle, and full JSON data export.
 
-Not built yet: the optional bring-your-own-key AI layer and progress photos. See [Roadmap](#roadmap).
+### Coaching
+
+- **Progression & intensity** — Double progression (reps 8→12, then equipment-aware load jump) or linear
+  (% of estimated 1RM). Per-equipment weight increments (barbell/cable 2.5 kg, dumbbell 2 kg, machine
+  5 kg, etc.) with per-exercise overrides for stubborn machines. Bodyweight lifts log reps-only (shown
+  as BW × reps, e.g., BW × 12). Suggests next-session weight and reps from your history and RIR,
+  estimates 1RM via Epley, regresses load after a break, and offers a deload when fatigue accumulates.
+- **Equipment-aware substitution** — No barbell? "Use dumbbells instead" rewrites a plan's barbell
+  lifts to dumbbell equivalents. Slots that match nothing in your kit auto-swap to a catalog
+  equivalent, labelled so you can see it happened.
+- **Recovery & consistency** — A three-tap daily readiness check-in (sleep / soreness / energy)
+  produces a 0–100 score that feeds the progression engine. Training streaks forgive up to two rest
+  days, with a nudge when you fall off pace. Personal records are detected and celebrated.
+
+### Library & progress
+
+- **Exercise library** — 1,937 exercises (including 134 stretches), searchable and filterable by muscle group, movement
+  pattern, and equipment. 1,254 carry animated demonstration GIFs. Detail cards show worked muscles
+  on an anatomical body map, instructions, and your cross-session records. When building a plan or
+  adding exercises mid-session, you can multi-select exercises at once and view inline details without
+  losing your selection. Add your own custom exercises with an optional category (Strength or Mobility) — 
+  the app auto-tags the muscles they work from the name.
+- **Progress tracking** — Volume by muscle group over 7/14/30/365-day windows with drill-down to 17
+  individual muscles and a body-map heatmap. Weight-loss, strength, and hypertrophy goals with
+  adaptive suggestions. Body weight and measurements with a trend sparkline.
+
+> [!NOTE]
+> Not built yet: the optional bring-your-own-key AI layer and progress photos. See [Roadmap](#roadmap).
 
 ## Tech stack
 
-| | |
+| Layer | Technology |
 |---|---|
 | Frontend | React 19 + TypeScript, Vite, Tailwind CSS, React Router |
 | Drag-and-drop | @dnd-kit (core, sortable, utilities) |
@@ -117,13 +156,13 @@ D1 (SQLite) — per-user rows: users, sessions, setlogs, plans, exclusions,
             ↕ pull restores the same data on a new device
 ```
 
-Sync model: client-generated UUID `id`, `createdAt`/`updatedAt`, `deletedAt` tombstone, last-write-wins
+**Sync model:** client-generated UUID `id`, `createdAt`/`updatedAt`, `deletedAt` tombstone, last-write-wins
 by `updatedAt`. `userId` is always taken from the verified JWT and never from the request body — that's
 the per-user isolation boundary.
 
-## Run it locally
+## Getting started
 
-**Logging only, no sync, no auth:**
+### Logging only — no sync, no auth
 
 ```bash
 npm install
@@ -133,9 +172,12 @@ npm run seed:bodymap   # pull anatomical body-map SVG paths
 npm run dev            # → http://localhost:5173
 ```
 
-Optionally, create `.env.development.local` with `VITE_AUTH_STUB=1` to skip the Google sign-in screen and sign in as "Local Dev". Note: this uses a client-only token that the backend does not accept, so `/sync` is unavailable — use email/password login if you need to test sync and data replication.
+> [!TIP]
+> Create `.env.development.local` with `VITE_AUTH_STUB=1` to skip the Google sign-in screen and sign
+> in as "Local Dev". This uses a client-only token that the backend does not accept, so `/sync` is
+> unavailable — use email/password login if you need to test sync and data replication.
 
-**Full stack (auth + sync + sharing against local D1):**
+### Full stack — auth, sync and sharing against local D1
 
 ```bash
 cp .dev.vars.example .dev.vars                        # set JWT_SECRET; Google keys optional
@@ -151,9 +193,12 @@ sync, and plan sharing to work.
 
 Set `AUTH_STUB=1` in `.dev.vars` to sign in without a real Google OAuth client — it adds
 `/auth/dev-login`, which mints a real JWT for a fake identity. Email/password sign-in always works
-against local D1 and doesn't need this flag. **Never set it in production.**
+against local D1 and doesn't need this flag.
 
-**Tests:**
+> [!CAUTION]
+> **Never set `AUTH_STUB` in production.**
+
+### Tests
 
 ```bash
 npm run smoke   # RxDB schema sanity check (9 collections)
@@ -180,13 +225,14 @@ npx wrangler pages secret put GOOGLE_CLIENT_SECRET
 npx wrangler pages secret put JWT_SECRET
 ```
 
-In the Google Cloud console, add the deployed callback as an authorized redirect URI
-(`https://<your-domain>/auth/google/callback`). Web Push additionally needs a VAPID key pair —
-see `.dev.vars.example`. Make sure `AUTH_STUB` is **not** set in the production environment.
+> [!IMPORTANT]
+> In the Google Cloud console, add the deployed callback as an authorized redirect URI
+> (`https://<your-domain>/auth/google/callback`). Web Push additionally needs a VAPID key pair —
+> see `.dev.vars.example`. Make sure `AUTH_STUB` is **not** set in the production environment.
 
 ## Roadmap
 
-| | |
+| Item | Status |
 |---|---|
 | Optional AI layer | Bring your own AI key to improve plans and recommendations. Never required — the app works fully without it. |
 | Progress photos | Deferred. |
